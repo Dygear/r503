@@ -8,6 +8,7 @@
 // Hangzhou Grow Technology Co., Ltd.
 // 2019.6 Ver: 1.1
 
+#[allow(dead_code)]
 const READY: u8 = 0x55;
 
 // ## Preface & Declaration
@@ -442,8 +443,8 @@ impl ConfirmationCode {
 ///     0x01: Error when receiving package;
 ///     0x13: Wrong password;
 /// Instruction code: 0x13
-pub fn vfy_pwd(password: u32) -> ConfirmationCode {
-    let pw = PASSWORD;
+pub fn vfy_pwd(_password: u32) -> ConfirmationCode {
+    let _pw = PASSWORD;
     todo!()
 }
 
@@ -453,7 +454,7 @@ pub fn vfy_pwd(password: u32) -> ConfirmationCode {
 ///     0x00: Password setting complete;
 ///     0x01: Error when receiving package;
 /// Instruction code: 0x12
-pub fn set_pwd(password: [u8; 4]) -> ConfirmationCode {
+pub fn set_pwd(_password: [u8; 4]) -> ConfirmationCode {
     todo!()
 }
 
@@ -463,7 +464,7 @@ pub fn set_pwd(password: [u8; 4]) -> ConfirmationCode {
 ///     0x00: Address setting complete;
 ///     0x01: Error when receiving package;
 /// Instruction code: 0x15
-pub fn set_adder(address: [u8; 4]) -> ConfirmationCode {
+pub fn set_adder(_address: [u8; 4]) -> ConfirmationCode {
     todo!()
 }
 
@@ -474,7 +475,7 @@ pub fn set_adder(address: [u8; 4]) -> ConfirmationCode {
 ///     0x01: Error when receiving package;
 ///     0x1A: Wrong register number;
 /// Instruction code: 0x0E
-pub fn set_sys_para(parameter: ParameterSetting) -> ConfirmationCode {
+pub fn set_sys_para(_parameter: ParameterSetting) -> ConfirmationCode {
     todo!()
 }
 
@@ -498,11 +499,12 @@ pub enum PortControl {
 ///     0x01: Error when receiving package;
 ///     0x1D: Fail to operate the communication port;
 /// Instruction code: 0x17
-pub fn control(control_code: PortControl) -> ConfirmationCode {
+pub fn control(_control_code: PortControl) -> ConfirmationCode {
     ConfirmationCode::Success
 }
 
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct BasicParameters {
     /// Contents of system status register
     status_register: u16,
@@ -566,7 +568,7 @@ pub type IndexTable = [u8; 32];
 ///     0x00: Read complete;
 ///     0x01: Error when receiving package;
 /// Instuction code: 0x1F
-pub fn read_index_table(index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
+pub fn read_index_table(_index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
     todo!()
 }
 
@@ -592,6 +594,7 @@ type ImageData = [u8; 24768];
 
 /// TODO: Make this actually real.
 /// Template size: 768 bytes.
+#[allow(dead_code)]
 type TemplateData = [u8; 768];
 
 /// Upload image - UpImage
@@ -616,7 +619,7 @@ pub fn up_image() -> (ConfirmationCode, ImageData) {
 ///     0x0E: Fail to transfer the following data packet;
 /// Instuction code: 0x0B
 ///     Module shall transfer the following data packet after responding to the upper computer. Data package length must be 64, 128, or 256.
-pub fn down_image(image: ImageData) -> ConfirmationCode {
+pub fn down_image(_image: ImageData) -> ConfirmationCode {
     todo!()
 }
 
@@ -642,7 +645,7 @@ pub enum BufferID {
 ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
 ///     0x15: Fail to generate the image for the lackness of valid primary image;
 /// Instuction code: 0x02
-pub fn img2_tz(buffer_id: BufferID) -> ConfirmationCode {
+pub fn img2_tz(_buffer_id: BufferID) -> ConfirmationCode {
     todo!()
 }
 
@@ -666,7 +669,7 @@ pub fn reg_model() -> ConfirmationCode {
 ///     0x01: Error when receiving package;
 ///     0x0D: Eerror when uploading template;
 /// Instuction code: 0x08
-pub fn up_char(buffer_id: BufferID) -> ConfirmationCode {
+pub fn up_char(_buffer_id: BufferID) -> ConfirmationCode {
     todo!()
 }
 
@@ -680,7 +683,7 @@ pub fn up_char(buffer_id: BufferID) -> ConfirmationCode {
 /// Instuction code: 0x09
 ///     Module shall transfer following data packet after responding to the upper computer.;
 ///     The instruction doesn’t affect buffer contents.
-pub fn down_char(buffer_id: BufferID, template: CharacterData) -> ConfirmationCode {
+pub fn down_char(_buffer_id: BufferID, _template: CharacterData) -> ConfirmationCode {
     todo!()
 }
 
@@ -693,7 +696,7 @@ pub fn down_char(buffer_id: BufferID, template: CharacterData) -> ConfirmationCo
 ///     0x0B: Addressing PageID is beyond the finger library;
 ///     0x18: Error when writing Flash.
 /// Instuction code: 0x06
-pub fn store(buffer_id: BufferID, page_id: IndexPage) -> ConfirmationCode {
+pub fn store(_buffer_id: BufferID, _page_id: IndexPage) -> ConfirmationCode {
     // TODO: This one is a little funky. Page_ID param expects a [u8; 2].
     // The first byte being the page number, (0-3)
     // The second byte being the index in that page. (0-255)
@@ -709,7 +712,7 @@ pub fn store(buffer_id: BufferID, page_id: IndexPage) -> ConfirmationCode {
 ///     0x0C: Error when reading template from library or the readout template is invalid;
 ///     0x0B: Addressing PageID is beyond the finger library;
 /// Instuction code: 07H
-pub fn load_char(buffer_id: BufferID, page_id: IndexPage) -> ConfirmationCode {
+pub fn load_char(_buffer_id: BufferID, _page_id: IndexPage) -> ConfirmationCode {
     // TODO: This one is a little funky. Page_ID param expects a [u8; 2].
     // The first byte being the page number, (0-3)
     // The second byte being the index in that page. (0-255)
@@ -724,7 +727,7 @@ pub fn load_char(buffer_id: BufferID, page_id: IndexPage) -> ConfirmationCode {
 ///     0x01: Error when receiving package;
 ///     0x10: Failed to delete templates;
 /// Instuction code: 0x0C
-pub fn delete_char(buffer_id: BufferID, n: u8) -> ConfirmationCode {
+pub fn delete_char(_buffer_id: BufferID, _n: u8) -> ConfirmationCode {
     // TODO: This one is a little funky. Page_ID param expects a [u8; 2].
     // The first byte being the page number, (0-3)
     // The second byte being the index in that page. (0-255)
@@ -756,6 +759,7 @@ pub fn r#match() -> (ConfirmationCode, u8) {
     todo!()
 }
 
+#[allow(dead_code)]
 pub struct PageIndex {
     start_page: IndexPage,
     entry: u8,
@@ -770,7 +774,11 @@ pub struct PageIndex {
 ///     0x09: No matching in the library (both the PageID and matching score are 0);
 /// Instuction code: 0x04
 ///     The instruction doesn’t affect the contents of the buffers.
-pub fn search(buffer_id: BufferID, start_page: u8, page_num: u8) -> (ConfirmationCode, PageIndex) {
+pub fn search(
+    _buffer_id: BufferID,
+    _start_page: u8,
+    _page_num: u8,
+) -> (ConfirmationCode, PageIndex) {
     todo!()
 }
 
@@ -853,6 +861,7 @@ pub fn get_fw_ver() -> (ConfirmationCode, FwVer) {
 
 /// Product information: store in the following order. For Numbers, the high byte comes first. For a string, the insufficient part is 0x00.
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct ProdInfo {
     /// module type, ASCII
     fpm_model: [char; 16],
@@ -969,7 +978,7 @@ pub fn aura_led_config(
 ///     0x01: Error when receiving package;
 /// Instuction code: 0x14
 pub fn get_random_code() -> ConfirmationCode {
-    let packet: Package = Package {
+    let _packet: Package = Package {
         identifier: Identifier::Command,
         length: 4,
         contents: Payload {
@@ -1005,7 +1014,7 @@ pub fn read_inf_page() -> (ConfirmationCode, Page) {
 ///     0x00: Write success;
 ///     0x01: Error when receiving package;
 /// Instuction code: 0x18
-pub fn write_notepad(note_page_number: u8, content: Page) {
+pub fn write_notepad(_note_page_number: u8, _content: Page) {
     todo!()
 }
 
@@ -1016,7 +1025,7 @@ pub fn write_notepad(note_page_number: u8, content: Page) {
 ///     0x00: Read success;
 ///     0x01: Error when receiving package;
 /// Instuction code: 0x19
-pub fn read_notepad(note_page_number: u8, content: Page) {
+pub fn read_notepad(_note_page_number: u8, _content: Page) {
     todo!()
 }
 
