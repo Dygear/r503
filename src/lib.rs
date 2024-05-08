@@ -219,7 +219,7 @@ const HEADER: u16 = 0xEF01;
 //      0x08: End of Data packet.
 #[repr(u8)]
 #[derive(Clone, Copy)]
-pub enum PackageId {
+pub enum Identifier {
     Command = 0x01,
     Data = 0x02,
     Acknowledge = 0x03,
@@ -236,7 +236,18 @@ pub type Length = u16;
 // Symbol: DATA
 // Length: -
 // Description: It can be commands, data, command's parameters, acknowledge result, etc. (fingerprint character value, template are all deemed as data);
-pub enum Data {}
+pub struct Payload {
+    /// The first and maybe only thing is the instruction
+    pub instruction: Instruction,
+}
+
+impl Default for Payload {
+    fn default() -> Self {
+        Self {
+            instruction: Instruction::SoftRst,
+        }
+    }
+}
 
 // Name: Checksum
 // Symbol: SUM
@@ -250,11 +261,11 @@ pub struct Package {
     /// See Name: Adder
     address: u32,
     /// See Name: Package identifier
-    pid: PackageId,
+    identifier: Identifier,
     /// See Name: Package length
     length: Length,
     /// See Name: Package contents
-    contents: Data,
+    contents: Payload,
     /// See Name: Checksum
     checksum: Sum,
 }
@@ -270,11 +281,11 @@ impl Package {
         self.address = address;
         self
     }
-    pub fn get_identifier(&self) -> PackageId {
-        self.pid
+    pub fn get_identifier(&self) -> Identifier {
+        self.identifier
     }
-    pub fn set_identifier(&mut self, pid: PackageId) -> &Self {
-        self.pid = pid;
+    pub fn set_identifier(&mut self, identifier: Identifier) -> &Self {
+        self.identifier = identifier;
         self
     }
     pub fn get_length(&self) -> Length {
@@ -283,10 +294,10 @@ impl Package {
     pub fn set_length(&mut self, len: Length) {
         self.length = len;
     }
-    pub fn get_contents(&self) -> &Data {
+    pub fn get_contents(&self) -> &Payload {
         &self.contents
     }
-    pub fn set_contents(&mut self, contents: Data) {
+    pub fn set_contents(&mut self, contents: Payload) {
         self.contents = contents;
     }
     pub fn get_checksum(&self) -> &Sum {
@@ -309,6 +320,19 @@ impl Package {
         // Contents
 
         &self.checksum
+    }
+}
+
+impl Default for Package {
+    fn default() -> Self {
+        Self {
+            header: HEADER,
+            address: ADDRESS,
+            identifier: Identifier::Acknowledge,
+            length: 12,
+            contents: Payload::default(),
+            checksum: Sum::default(),
+        }
     }
 }
 
@@ -376,30 +400,30 @@ pub enum ConfirmationCode {
 impl ConfirmationCode {
     pub fn from(value: u8) -> Self {
         match value {
-            0x00 => Self::Success,
-            0x01 => Self::ErrorReceivingPacket,
-            0x02 => Self::NoFingerOnSensor,
-            0x03 => Self::FailToEnrollFinger,
-            0x06 => Self::FailToGenerateCharacterOverDisorderlyFingerprintImage,
-            0x07 => Self::FailToGenerateCharacterLacknessOfCharacterPointOrOverSmallness,
-            0x08 => Self::FailFingerDoesntMatch,
-            0x09 => Self::FailToFindMatchingFinger,
-            0x0A => Self::FailToCombineCharacterFiles,
-            0x0B => Self::AddressingPageIDIsBeyoundTheFingerLibary,
-            0x0C => Self::ErrorWhenReadingTemplateFromLibararORTemplateIsInvalid,
-            0x0D => Self::ErrorWhenUploadingTemplate,
-            0x0E => Self::ModuleCantReceivingTheFollowingDataPackages,
-            0x0F => Self::ErrorWhenUploadingImage,
-            0x10 => Self::FailToDeleteTheTemplate,
-            0x11 => Self::FailToClearFingerLibary,
-            0x13 => Self::WrongPassword,
-            0x15 => Self::FailToGenerateImageLacknessOfValidPrimaryImage,
-            0x18 => Self::ErrorWhenWritingFlash,
-            0x19 => Self::NoDefinitionError,
-            0x1A => Self::InvalidRegisterNumber,
-            0x1B => Self::IncorrectConfigurationOfRegister,
-            0x1C => Self::WrongNotepadPageNumber,
-            0x1D => Self::FailToOperateTheCommunicationPort,
+            0x00 /*   0 */ => Self::Success,
+            0x01 /*   1 */ => Self::ErrorReceivingPacket,
+            0x02 /*   2 */ => Self::NoFingerOnSensor,
+            0x03 /*   3 */ => Self::FailToEnrollFinger,
+            0x06 /*   6 */ => Self::FailToGenerateCharacterOverDisorderlyFingerprintImage,
+            0x07 /*   7 */ => Self::FailToGenerateCharacterLacknessOfCharacterPointOrOverSmallness,
+            0x08 /*   8 */ => Self::FailFingerDoesntMatch,
+            0x09 /*   9 */ => Self::FailToFindMatchingFinger,
+            0x0A /*  10 */ => Self::FailToCombineCharacterFiles,
+            0x0B /*  11 */ => Self::AddressingPageIDIsBeyoundTheFingerLibary,
+            0x0C /*  12 */ => Self::ErrorWhenReadingTemplateFromLibararORTemplateIsInvalid,
+            0x0D /*  13 */ => Self::ErrorWhenUploadingTemplate,
+            0x0E /*  14 */ => Self::ModuleCantReceivingTheFollowingDataPackages,
+            0x0F /*  15 */ => Self::ErrorWhenUploadingImage,
+            0x10 /*  16 */ => Self::FailToDeleteTheTemplate,
+            0x11 /*  17 */ => Self::FailToClearFingerLibary,
+            0x13 /*  19 */ => Self::WrongPassword,
+            0x15 /*  21 */ => Self::FailToGenerateImageLacknessOfValidPrimaryImage,
+            0x18 /*  23 */ => Self::ErrorWhenWritingFlash,
+            0x19 /*  24 */ => Self::NoDefinitionError,
+            0x1A /*  25 */ => Self::InvalidRegisterNumber,
+            0x1B /*  26 */ => Self::IncorrectConfigurationOfRegister,
+            0x1C /*  27 */ => Self::WrongNotepadPageNumber,
+            0x1D /*  28 */ => Self::FailToOperateTheCommunicationPort,
             _ => Self::SystemReserved,
         }
     }
@@ -533,40 +557,7 @@ pub enum IndexPage {
 /// Index table structure: every 8 bits is a group, and each group is output starting from the high position.
 /// Data "0" in the index table means that there is no valid template in the corresponding position;
 /// Data "1" means that there is a valid template in the corresponding position.
-pub struct IndexTable {
-    t0: u8,
-    t1: u8,
-    t2: u8,
-    t3: u8,
-    t4: u8,
-    t5: u8,
-    t6: u8,
-    t7: u8,
-    t8: u8,
-    t9: u8,
-    t10: u8,
-    t11: u8,
-    t12: u8,
-    t13: u8,
-    t14: u8,
-    t15: u8,
-    t16: u8,
-    t17: u8,
-    t18: u8,
-    t19: u8,
-    t20: u8,
-    t21: u8,
-    t22: u8,
-    t23: u8,
-    t24: u8,
-    t25: u8,
-    t26: u8,
-    t27: u8,
-    t28: u8,
-    t29: u8,
-    t30: u8,
-    t31: u8,
-}
+pub type IndexTable = [u8; 32];
 
 /// Read fingerprint template index table - ReadIndexTable(0x1F)
 /// Description: Read the fingerprint template index table of the module, read the index table of the fingerprint template up to 256 at a time (32 bytes)
@@ -575,7 +566,7 @@ pub struct IndexTable {
 ///     0x00: Read complete;
 ///     0x01: Error when receiving package;
 /// Instuction code: 0x1F
-pub fn read_index_table(index_page: IndexPage) -> (ConfirmationCode, [u8; 32]) {
+pub fn read_index_table(index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
     todo!()
 }
 
@@ -978,7 +969,17 @@ pub fn aura_led_config(
 ///     0x01: Error when receiving package;
 /// Instuction code: 0x14
 pub fn get_random_code() -> ConfirmationCode {
-    todo!()
+    let packet: Package = Package {
+        identifier: Identifier::Command,
+        length: 4,
+        contents: Payload {
+            instruction: Instruction::GetRandomCode,
+        },
+        checksum: Sum::default(),
+        ..Default::default()
+    };
+
+    ConfirmationCode::Success
 }
 
 pub type Page = [u8; 512];
@@ -1019,41 +1020,76 @@ pub fn read_notepad(note_page_number: u8, content: Page) {
     todo!()
 }
 
-// # Instructions Table
-// Code Identifier      Description
-// 0x01 GenImg          Collect finger image
-// 0x02 Img2Tz          To generate character file from image
-// 0x03 Match           Carry out precise matching of two templates;
-// 0x04 Serach          Search the finger library
-// 0x05 RegModel        To combine character files and generate template
-// 0x06 Store           To store template;
-// 0x07 LoadChar        To read/load template
-// 0x08 UpChar          To upload template
-// 0x09 DownChr         To download template
-// 0x0A UpImage         To upload image
-// 0x0B DownImage       To download image
-// 0x0C DeletChar       To delete tempates
-// 0x0D Empty           To empty the library
-// 0x0E SetSysPara      To set system Paramete
-// 0x0F ReadSysPara     To read system Parameter
-// 0x12 SetPwd          To set password
-// 0x13 VfyPwd          To verify password
-// 0x14 GetRandomCode   To get random code
-// 0x15 SetAdder        To set device address
-// 0x16 ReadInfPage     Read information page
-// 0x17 Control         Port control
-// 0x18 WriteNotepad    To write note pad
-// 0x19 ReadNotepad     To read note pad
-// 0x1D TempleteNum     To read finger template numbers
-// 0x1F ReadIndexTable  Read fingerprint template index table
-// 0x28 GetImageEx      Fingerprint image collection extension command
-// 0x30 Cancel          Cancel instruction
-// 0x35 AuraLedConfig   Aura Control
-// 0x36 CheckSensor     Check Sensor
-// 0x39 GetAlgVer       Get the algorithm library version
-// 0x3A GetFwVer        Get the firmware version
-// 0x3D SoftRst         Soft reset
-// 0x40 HandShake       Hand Shake
+/// # Instructions Table
+#[repr(u8)]
+pub enum Instruction {
+    /// Collect finger image
+    GenImg = 0x01,
+    /// To generate character file from image
+    Img2Tz = 0x02,
+    /// Carry out precise matching of two templates;
+    Match = 0x03,
+    /// Search the finger library
+    Search = 0x04,
+    /// To combine character files and generate template
+    RegModel = 0x05,
+    /// To store template;
+    Store = 0x06,
+    /// To read/load template
+    LoadChar = 0x07,
+    /// To upload template
+    UpChar = 0x08,
+    /// To download template
+    DownChar = 0x09,
+    /// To upload image
+    UpImage = 0x0A,
+    /// To download image
+    DownImage = 0x0B,
+    /// To delete tempates
+    DeleteChar = 0x0C,
+    /// To empty the library
+    Empty = 0x0D,
+    /// To set system Paramete
+    SetSysPara = 0x0E,
+    /// To read system Parameter
+    ReadSysPara = 0x0F,
+    /// To set password
+    SetPwd = 0x12,
+    /// To verify password
+    VfyPwd = 0x13,
+    /// To get random code
+    GetRandomCode = 0x14,
+    /// To set device address
+    SetAdder = 0x15,
+    /// Read information page
+    ReadInfPage = 0x16,
+    /// Port control
+    Control = 0x17,
+    /// To write note pad
+    WriteNotepad = 0x18,
+    /// To read note pad
+    ReadNotepad = 0x19,
+    /// To read finger template numbers
+    TempleteNum = 0x1D,
+    /// Read fingerprint template index table
+    ReadIndexTable = 0x1F,
+    /// Fingerprint image collection extension command
+    GetImageEx = 0x28,
+    /// Cancel instruction
+    Cancel = 0x30,
+    /// Aura Control
+    AuraLedConfig = 0x35,
+    /// Check Sensor
+    CheckSensor = 0x36,
+    /// Get the algorithm library version
+    GetAlgVer = 0x39,
+    /// Get the firmware version
+    GetFwVer = 0x3A,
+    /// Soft reset
+    SoftRst = 0x3D,
+    /// Hand Shake
+    HandShake = 0x40,
+}
 
 // # Internal Functions
 
