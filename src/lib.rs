@@ -2,21 +2,10 @@
 use core::mem::size_of;
 use embedded_io_async::{Read, Write};
 
-pub struct Driver<UART: Read + Write> {
+pub struct Driver<UART> {
     pub uart: UART,
 
     packet: Package,
-}
-
-impl<UART: Read + Write> Driver<UART> {
-    pub fn new(&mut self, uart: UART, address: Option<Address>) -> &mut Self {
-        self.uart = uart;
-        self.packet.address = match address {
-            Some(address) => address,
-            None => ADDRESS,
-        };
-        self
-    }
 }
 
 // DOCUMENTATION: R503 https://github.com/adafruit/Adafruit-Fingerprint-Sensor-Library/files/10964885/R503.fingerprint.module.user.manual-V1.2.2.pdf
@@ -525,58 +514,689 @@ impl ConfirmationCode {
 // # 5. Module Instruction System
 // R30X series provide 23 instructions. R50X series provide 33 instructions. Through combination of different instructions, application program may realize muti finger authentication functions. All commands/data are transferred in package format. Refer to 5.1 for the detailed information of package.
 
-// # System-related instructions
+impl<UART> Driver<UART> {
+    pub fn new(&mut self, uart: UART, address: Option<Address>) -> &mut Self
+    where
+        UART: Read + Write,
+    {
+        self.uart = uart;
+        self.packet.address = match address {
+            Some(address) => address,
+            None => ADDRESS,
+        };
+        self
+    }
 
-/// Verify passwoard - VfyPwd
-/// Description: Verify Module's handshaking password.
-/// Input Parameter: Password (4 bytes)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Correct password;
-///     0x01: Error when receiving package;
-///     0x13: Wrong password;
-/// Instruction code: 0x13
-pub fn vfy_pwd(_password: Password) -> ConfirmationCode {
-    let _pw = PASSWORD;
-    todo!()
+    // # System-related instructions
+
+    /// Verify passwoard - VfyPwd
+    /// Description: Verify Module's handshaking password.
+    /// Input Parameter: Password (4 bytes)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Correct password;
+    ///     0x01: Error when receiving package;
+    ///     0x13: Wrong password;
+    /// Instruction code: 0x13
+    pub fn vfy_pwd(&mut self, _password: Password) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        let _pw = PASSWORD;
+        todo!()
+    }
+
+    /// Set password - SetPwd
+    /// Description: Set Module's handshaking password.
+    /// Input Parameter: Password (4 bytes)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Password setting complete;
+    ///     0x01: Error when receiving package;
+    ///     0x18: Error when writing FLASH;
+    ///     0x21: Have to verify password;
+    /// Instruction code: 0x12
+    pub fn set_pwd(&mut self, _password: Password) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Set Module address - SetAdder
+    /// Description: Set Module address.
+    /// Input Parameter: Addr
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Address setting complete;
+    ///     0x01: Error when receiving package;
+    ///     0x18: Error when writing FLASH;
+    /// Instruction code: 0x15
+    pub fn set_adder(&mut self, _address: Address) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Set module system's basic parameter - SetSysPara
+    /// Description: Operation parameter settings.
+    /// Input Parameter: Parameter number + Contents;
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Parameter setting complete;
+    ///     0x01: Error when receiving package;
+    ///     0x18: Error when writing FLASH;
+    ///     0x1A: Wrong register number;
+    /// Instruction code: 0x0E
+    pub fn set_sys_para(&mut self, _parameter: ParameterSetting, _content: u8) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Read system Parameter - ReadSysPara
+    /// Description: Read Module's status register and system basic configuration parameters;
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte) + basic parameter (16 bytes)
+    ///     0x00: Read complete;
+    ///     0x01: Error when receiving package;
+    ///     0x18: Error when writing FLASH;
+    /// Instuction code: 0x0F
+    pub fn read_sys_para(&mut self) -> (ConfirmationCode, BasicParameters)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Read valid template number - TempleteNum
+    /// Description: read the current valid template number of the Module
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)，template number:N
+    ///     0x00: Read success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x1D
+    pub fn templete_num(&mut self) -> (ConfirmationCode, u8)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Read fingerprint template index table - ReadIndexTable(0x1F)
+    /// Description: Read the fingerprint template index table of the module, read the index table of the fingerprint template up to 256 at a time (32 bytes)
+    /// Input Parameter: Index page
+    /// Return Parameter: Confirmation code+Fingerprint template index table
+    ///     0x00: Read complete;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x1F
+    pub fn read_index_table(&mut self, _index_page: IndexPage) -> (ConfirmationCode, IndexTable)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    // # Fingerprint-processing instructions
+
+    /// To collect finger image - GenImg
+    /// Description: detecting finger and store the detected finger image in ImageBuffer while returning successfully confirmation code; If there is no finger, returned confirmation code would be "can't detect finger".
+    /// Note: The difference between GetImageEx and GetImage instruction:
+    ///     GetImage: When the image quality is poor, return confirmation code 0x00 (the image is successfully captured).
+    ///     GetImageEx: When image quality is poor, return confirmation code 0x07 (image quality is too poor).
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Finger collection successs;
+    ///     0x01: Error when receiving package;
+    ///     0x02: Can't detect finger;
+    ///     0x03: Fail to collect finger;
+    /// Instuction code: 0x01
+    pub fn gen_img(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// I don't know if this function still exists.
+    /// To generate character file from image - Img2Tz
+    /// Description: to generate character file from the original finger image in ImageBuffer and store the file in CharBuffer1 or CharBuffer2.
+    /// Input Parameter: BufferID (character file buffer number)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Generate character file complete;
+    ///     0x01: Error when receiving package;
+    ///     0x06: Fail to generate character file due to the over-disorderly fingerprint image;
+    ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
+    ///     0x15: Fail to generate the image for the lackness of valid primary image;
+    /// Instuction code: 0x02
+    pub fn img2_tz(&mut self, _buffer_id: BufferID) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Upload image - UpImage
+    /// Description: to upload the image in Img_Buffer to upper computer.
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Ready to transfer the following data packet;
+    ///     0x01: Error when receiving package;
+    ///     0x0F: Fail to transfer the following data packet;
+    /// Instuction code: 0x0A
+    /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
+    /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
+    pub fn up_image(&mut self) -> (ConfirmationCode, ImageData)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Download the image - DownImage
+    /// Description: to download image from upper computer to Img_Buffer.
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Ready to transfer the following data packet;
+    ///     0x01: Error when receiving package;
+    ///     0x0E: Fail to transfer the following data packet;
+    /// Instuction code: 0x0B
+    /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
+    /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
+    pub fn down_image(&mut self, _image: ImageData) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To generate character file from image - GenChar
+    /// Description: to generate character file from the original finger image in ImageBuffer
+    /// Input Parameter: BufferID (character file buffer number)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Generate character file complete;
+    ///     0x01: Error when receiving package;
+    ///     0x06: Fail to generate character file due to the over-disorderly fingerprint image;
+    ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
+    ///     0x15: Fail to generate the image for the lackness of valid primary image;
+    /// Instruction code: 0x02
+    pub fn gen_char(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To generate template - RegModel
+    /// Description: To combine information of character files from CharBuffer1 and CharBuffer2 and generate a template which is stroed back in both CharBuffer1 and CharBuffer2.
+    /// Input Parameter: none
+    /// Return Parameter:Confirmation code (1 byte)
+    ///     0x00: Operation success;
+    ///     0x01: Error when receiving package;
+    ///     0x0A: Fail to combine the character files. That's, the character files don't belong to one finger.
+    /// Instuction code: 0x05
+    pub fn reg_model(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To upload character or template - UpChar
+    /// Description: Upload the data in the template buffer ModelBuffer to the upper computer.
+    /// Input Parameter: BufferID (Buffer number)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Ready to transfer the following data packet;
+    ///     0x01: Error when receiving package;
+    ///     0x0D: Eerror when uploading template;
+    ///     0x0F: Can not receive the following data packet;
+    /// Instuction code: 0x08
+    /// Note: This command don't need to use the CharBufferID, so the CharBufferID can be any value between 1 and 6.
+    /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
+    /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
+    /// Note: The instruction doesn't affect buffer contents.
+    pub fn up_char(&mut self, _buffer_id: BufferID) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Download template - DownChar
+    /// Description: upper computer download template to module buffer
+    /// Input Parameter: CharBufferID (Buffer number)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Ready to transfer the following data packet;
+    ///     0x01: Error when receiving package;
+    ///     0x0E: Can not receive the following data packet
+    /// Instuction code: 0x09
+    /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
+    /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
+    /// Note: The instruction doesn't affect buffer contents.
+    pub fn down_char(&mut self, _buffer_id: BufferID, _template: CharacterData) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To store template - Store
+    /// Description: to store the template of specified buffer (Buffer1/Buffer2) at the designated location of Flash library.
+    /// Input Parameter: CharBufferID, ModelID
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Storage success;
+    ///     0x01: Error when receiving package;
+    ///     0x0B: Addressing ModelID is beyond the finger library;
+    ///     0x18: Error when writing Flash.
+    /// Instuction code: 0x06
+    /// Note: CharBufferID is filled with 0x01
+    pub fn store(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        // TODO: This one is a little funky. _model_id param expects a [u8; 2].
+        // The first byte being the page number, (0-3)
+        // The second byte being the index in that page. (0-255)
+        todo!()
+    }
+
+    /// To read template from Flash library - LoadChar
+    /// Description: to load template at the specified location (PageID) of Flash library to template buffer CharBuffer1/CharBuffer2
+    /// Input Parameter: CharBufferID, ModelID
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Load success;
+    ///     0x01: Error when receiving package;
+    ///     0x0C: Error when reading template from library or the readout template is invalid;
+    ///     0x0B: Addressing ModelID is beyond the finger library;
+    /// Instuction code: 07H
+    /// Note: CharBufferID is filled with 0x01
+    pub fn load_char(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        // TODO: This one is a little funky. _model_id param expects a [u8; 2].
+        // The first byte being the page number, (0-3)
+        // The second byte being the index in that page. (0-255)
+        todo!()
+    }
+
+    /// To delete template - DeletChar
+    /// Description: to delete a segment (N) of templates of Flash library started from the specified location (or PageID);
+    /// Input Parameter: StartID + Num
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Delete success;
+    ///     0x01: Error when receiving package;
+    ///     0x10: Failed to delete templates;
+    ///     0x18: Error when write FLASH;
+    /// Instuction code: 0x0C
+    pub fn delete_char(&mut self, _start_id: BufferID, _num: u8) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To empty finger library - Empty
+    /// Description: to delete all the templates in the Flash library
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Empty success;
+    ///     0x01: Error when receiving package;
+    ///     0x11: Fail to clear finger library;
+    ///     0x18: Error when write FLASH;
+    /// Instuction code: 0x0D
+    pub fn empty(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To carry out precise matching of two finger templates - Match
+    /// Description: Compare the recently extracted character with the templates in the ModelBuffer, providing matching results.
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)，matching score.
+    ///     0x00: templates of the two buffers are matching!
+    ///     0x01: error when receiving package;
+    ///     0x08: templates of the two buffers aren't matching;
+    /// Instuction code: 0x03
+    /// Note: The instruction doesn't affect the contents of the buffers.
+    pub fn r#match(&mut self) -> (ConfirmationCode, MatchScore)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To search finger library - Search
+    /// Description: to search the whole finger library for the template that matches the one in CharBuffer1 or CharBuffer2. When found, PageID will be returned.
+    /// Input Parameter: CharBufferID + StartID + Num
+    /// Return Parameter: Confirmation code + ModelID (template number) + MatchScore
+    ///     0x00: found the matching finer;
+    ///     0x01: error when receiving package;
+    ///     0x09: No matching in the library (both the PageID and matching score are 0);
+    /// Instuction code: 0x04
+    /// Note: The instruction doesn't affect the contents of the buffers.
+    pub fn search(
+        &mut self,
+        _buffer_id: BufferID,
+        _start_page: u16,
+        _num: u16,
+    ) -> (ConfirmationCode, u16, MatchScore)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Fingerprint image collection extension command - GetImageEx(0x28)
+    /// Description: Detect the finger, record the fingerprint image and store it in ImageBuffer, return it and record the successful confirmation code; If no finger is detected, return no finger confirmation code (the module responds quickly to each instruction, therefore, for continuous detection, cycle processing is required, which can be limited to the number of cycles or the total time).
+    /// Differences between GetImageEx and the GetImage:
+    ///     GetImage: return the confirmation code 0x00 when the image quality is too bad (image collection succeeded)
+    ///     GetImageEx: return the confirmation code 0x07 when the image quality is too bad (poor collection quality)
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code
+    ///     0x00: Read success
+    ///     0x01: Error when receiving package;
+    ///     0x02: No fingers on the sensor;
+    ///     0x03: Unsuccessful entry
+    ///     0x07: Poor image quality;
+    /// Instuction code: 0x28
+    pub fn get_image_ex(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Cancel instruction - Cancel(0x30)
+    /// Description: Cancel instruction
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code
+    ///     0x00: Cancel setting successful;
+    ///     other: Cancel setting failed;
+    /// Instuction code: 0x30
+    pub fn cancel(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// HandShake - HandShake(0x40)
+    /// Description: Send handshake instructions to the module. If the module works normally, the confirmation code 0x00 will be returned. The upper computer can continue to send instructions to the module.If the confirmation code is other or no reply, it means that the device is abnormal.
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code
+    ///     0x00: The device is normal and can receive instructions;
+    ///     other: The device is abnormal.
+    /// Instuction code: 0x40
+    ///     In addition, after the module is powered on, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
+    pub fn handshake(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// CheckSensor - CheckSensor (0x36)
+    /// Description: Check whether the sensor is normal
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code
+    ///     0x00: The sensor is normal;
+    ///     0x29: the sensor is abnormal;
+    /// Instuction code: 0x36
+    pub fn check_sensor(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Get the algorithm library version - GetAlgVer (0x39)
+    /// Description: Get the algorithm library version
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code+AlgVer(algorithm library version string)
+    ///     0x00: Success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x39
+    pub fn get_alg_ver(&mut self) -> (ConfirmationCode, AlgVer)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Get the firmware version - GetFwVer (0x3A)
+    /// Description: Get the firmware version
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code+FwVer(Firmware version string)
+    ///     0x00: Success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x3A
+    pub fn get_fw_ver(&mut self) -> (ConfirmationCode, FwVer)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Read product information - ReadProdInfo (0x3C)
+    /// Description: Read product information
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code+ProdInfo(product information)
+    ///     0x00: Success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x3C
+    pub fn read_prod_info(&mut self) -> (ConfirmationCode, ProdInfo)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Soft reset SoftRst (0x3D)
+    /// Description: Send soft reset instruction to the module. If the module works normally, return confirmation code 0x00, and then perform reset operation.
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code
+    ///     0x00: Success;
+    ///     other: Device is abnormal
+    /// Instuction code: 0x3D
+    ///     After module reset, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
+    pub fn soft_rst(&mut self) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Aura control - AuraLedConfig (0x35)
+    /// Description: Aura LED control
+    /// Input Parameter: Control code: Ctrl; Speed; ColorIndex; Times
+    /// Return Parameter: Confirmation code
+    ///     0x00: Success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x35
+    pub fn aura_led_config(
+        &mut self,
+        ctrl: LightPattern,
+        speed: Speed,
+        color_index: Color,
+        count: Times,
+    ) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        let mut packet: [u8; 16] = [0x00; 16];
+        packet[10] = ctrl.into();
+        packet[11] = speed;
+        packet[12] = color_index.into();
+        packet[13] = count;
+        todo!()
+    }
+
+    /// Automatic registration template - AutoEnroll (0x31)
+    /// Description: When a fingerprint is recorded using an automatic registration template, the fingerprint image needs to be recorded six times for each fingerprint template. The blue light blinks when the fingerprint image is collected. The yellow light is on means the fingerprint image is collected successfully,the green light blinks means the fingerprint characteristic is generated successfully. If the finger is required to leave during image collection, the image will be collected again after the finger is lifted. During the process of waiting for the finger to leave, the white light flashes. After fingerprint images are collected for 6 times and features are generated successfully, features are synthesized and store fingerprint template. If the operation succeeds, the green light is on; if the operation fails, the red light is on. If the finger is away from the sensor for more than 10 seconds when in collecting the fingerprint image each time, it will automatically exits the automatic template registration process.
+    /// Input Paramater: ModelID (Fingerprint library location number)
+    ///     Config1: Whether to allow cover ID number
+    ///         Whether to allow cover ID number: 0: Not allowed 1: Allow
+    ///     Config2: Whether to allow duplicate fingerprints
+    ///         Whether to allow register duplicate fingerprints: 0: Not allowed 1: Allow
+    ///     Config3: Whether the module return the status in the critical step
+    ///         Whether to return to the critical step status during registration: 0: Not allowed 1: Allow
+    ///     Config4: Whether to allow ask the finger to leave
+    ///         Whether the finger is required to leave during the registration process in order to enter the next fingerprint image collection: 0: don't need to leave 1: have to leave
+    /// Return Parameter: Confirmation code + ModelID (Fingerprint library location number)
+    /// Instruction code: 0x31
+    ///     0x00: Set successfully;
+    ///     0x01: Set fails;
+    ///     0x07: Failed to generate a feature;
+    ///     0x0a: Failed to merge templates;
+    ///     0x0b: The ID is out of range;
+    ///     0x1f: Fingerprint library is full;
+    ///     0x22: Fingerprint template is empty;
+    ///     0x26: Times out;
+    ///     0x27: Fingerprint already exists;
+    /// Note: Model ID: Location ID : 0-0xC7, 0xC8-0xFF is automatic filling (The ID number is assigned by the system; The system will be starting from template 0 to searches the empty templates.)
+    pub fn auto_enroll(
+        &mut self,
+        _model_id: IndexPage,
+        _allow_cover_id: bool,
+        _allow_duplicate: bool,
+        _return_in_critical: bool,
+        _ask_finger_to_leave: bool,
+    ) -> (ConfirmationCode, IndexPage)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// Automatic fingerprint verification - AutoIdentify (0x32)
+    /// Description: When the automatic fingerprint verification command is used to search and verify a fingerprint, the system automatically collects a fingerprint image and generates features, and compares the image with the fingerprint template in the fingerprint database. If the comparison is successful, the system returns the template ID number and the comparison score. If the comparison fails, the system returns the corresponding error code.
+    ///              When obtaining the fingerprint image, the fingerprint head will light up with a white breathing light. After the image collection is successful, the yellow light will light up, and the green light will light up after the comparison is successful. If there is a fingerprint image collection error or no fingerprint search, the red light will be on to prompt.
+    ///              If the system does not detect the finger for more than 10 seconds after sending the command or collecting the fingerprint image again after reporting an error, it will automatically exit the command.
+    /// Input Paramater: SafeGrade (1-5 level)
+    ///                  StartPos (0-199)
+    ///                  Num - Number of searches (0-199)
+    ///                  Config1 - Whether the module returns to the status in key steps
+    ///                  Config2 - Number of fingerprint search error
+    /// Return Parameter: Confirmation code + ModelID + MarchScore
+    ///     0x00: Set successfully;
+    ///     0x01: Set fails;
+    ///     0x09: Failed to search fingerprint;
+    ///     0x0b: The ID is out of range;
+    ///     0x22: Fingerprint template is empty;
+    ///     0x24: Fingerprint library is empty;
+    ///     0x26: Times out;
+    /// Instruction code: 0x32
+    pub fn auto_identify(
+        &mut self,
+        _safe_grade: SafeGrade,
+        _start: u8,
+        _num: u8,
+        _search_times: u8,
+        _return_in_critical: bool,
+    ) -> (ConfirmationCode, IndexPage, MatchScore)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    // # Other instructions
+
+    /// To generate a random code - GetRandomCode
+    /// Description: to command the Module to generate a random number and return it to upper computer;Refer to 4.8 for more about Random Number Generator;
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Generation success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x14
+    pub fn get_random_code(&mut self) -> (ConfirmationCode, u32)
+    where
+        UART: Read + Write,
+    {
+        let _packet: Package = Package {
+            identifier: Identifier::Command,
+            length: 4,
+            contents: Data {
+                instruction: Instruction::GetRandomCode,
+            },
+            checksum: Sum::default(),
+            ..Default::default()
+        };
+
+        (ConfirmationCode::Success, 4 /* Fair Dice Roll */)
+    }
+
+    /// To read information page - ReadInfPage
+    /// Description: read information page (512bytes)
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Ready to transfer the following data packet;
+    ///     0x01: Error when receiving package;
+    ///     0x0F: Can not transfer the following data packet;
+    /// Instuction code: 0x16
+    /// Note: Module shall transfer following data packet after responding to the upper computer;
+    /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery;
+    /// Note: The instruction doesn't affect buffer contents;
+    pub fn read_inf_page(&mut self) -> (ConfirmationCode, Page)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To write note pad - WriteNotepad
+    /// Description: For upper computer to write data to the specified Flash page; Also see ReadNotepad;
+    /// Input Parameter: NotePageNum, user content (or data content)
+    /// Return Parameter: Confirmation code (1 byte)
+    ///     0x00: Write success;
+    ///     0x01: Error when receiving package;
+    ///     0x18: Error when write FLASH;
+    /// Instuction code: 0x18
+    pub fn write_notepad(&mut self, _note_page_number: u8, _content: Page) -> ConfirmationCode
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
+
+    /// To read note pad - ReadNotepad
+    /// Description: To read the specified page's data content; Also see WriteNotepad.
+    /// Input Parameter: none
+    /// Return Parameter: Confirmation code (1 byte) + data content
+    ///     0x00: Read success;
+    ///     0x01: Error when receiving package;
+    /// Instuction code: 0x19
+    pub fn read_notepad(
+        &mut self,
+        _note_page_number: u8,
+        _content: Page,
+    ) -> (ConfirmationCode, Page)
+    where
+        UART: Read + Write,
+    {
+        todo!()
+    }
 }
 
-/// Set password - SetPwd
-/// Description: Set Module's handshaking password.
-/// Input Parameter: Password (4 bytes)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Password setting complete;
-///     0x01: Error when receiving package;
-///     0x18: Error when writing FLASH;
-///     0x21: Have to verify password;
-/// Instruction code: 0x12
-pub fn set_pwd(_password: Password) -> ConfirmationCode {
-    todo!()
+// # Internal Functions
+
+#[inline]
+pub fn get_u16_as_u16_parts(value: u16) -> [u16; 2] {
+    [value >> 8, value & 0xFF]
 }
 
-/// Set Module address - SetAdder
-/// Description: Set Module address.
-/// Input Parameter: Addr
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Address setting complete;
-///     0x01: Error when receiving package;
-///     0x18: Error when writing FLASH;
-/// Instruction code: 0x15
-pub fn set_adder(_address: Address) -> ConfirmationCode {
-    todo!()
+#[inline]
+pub fn get_u32_as_u16_parts(value: u32) -> [u16; 4] {
+    [
+        (value >> 24 & 0xFF) as u16,
+        (value >> 16 & 0xFF) as u16,
+        (value >> 8 & 0xFF) as u16,
+        (value & 0xFF) as u16,
+    ]
 }
 
-/// Set module system's basic parameter - SetSysPara
-/// Description: Operation parameter settings.
-/// Input Parameter: Parameter number + Contents;
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Parameter setting complete;
-///     0x01: Error when receiving package;
-///     0x18: Error when writing FLASH;
-///     0x1A: Wrong register number;
-/// Instruction code: 0x0E
-pub fn set_sys_para(_parameter: ParameterSetting, _content: u8) -> ConfirmationCode {
-    todo!()
-}
+// # Module Defined Types
 
 #[derive(Default)]
 #[allow(dead_code)]
@@ -597,29 +1217,6 @@ pub struct BasicParameters {
     buad_setting: u16,
 }
 
-/// Read system Parameter - ReadSysPara
-/// Description: Read Module's status register and system basic configuration parameters;
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte) + basic parameter (16 bytes)
-///     0x00: Read complete;
-///     0x01: Error when receiving package;
-///     0x18: Error when writing FLASH;
-/// Instuction code: 0x0F
-pub fn read_sys_para() -> (ConfirmationCode, BasicParameters) {
-    todo!()
-}
-
-/// Read valid template number - TempleteNum
-/// Description: read the current valid template number of the Module
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)，template number:N
-///     0x00: Read success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x1D
-pub fn templete_num() -> (ConfirmationCode, u8) {
-    todo!()
-}
-
 /// Index tables are read per page, 256 templates per page
 /// Index page 0 means to read 0 ~ 255 fingerprint template index table
 /// Index page 1 means to read 256 ~ 511 fingerprint template index table
@@ -637,78 +1234,6 @@ pub enum IndexPage {
 /// Data "1" means that there is a valid template in the corresponding position.
 pub type IndexTable = [u8; 32];
 
-/// Read fingerprint template index table - ReadIndexTable(0x1F)
-/// Description: Read the fingerprint template index table of the module, read the index table of the fingerprint template up to 256 at a time (32 bytes)
-/// Input Parameter: Index page
-/// Return Parameter: Confirmation code+Fingerprint template index table
-///     0x00: Read complete;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x1F
-pub fn read_index_table(_index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
-    todo!()
-}
-
-// # Fingerprint-processing instructions
-
-/// To collect finger image - GenImg
-/// Description: detecting finger and store the detected finger image in ImageBuffer while returning successfully confirmation code; If there is no finger, returned confirmation code would be "can't detect finger".
-/// Note: The difference between GetImageEx and GetImage instruction:
-///     GetImage: When the image quality is poor, return confirmation code 0x00 (the image is successfully captured).
-///     GetImageEx: When image quality is poor, return confirmation code 0x07 (image quality is too poor).
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Finger collection successs;
-///     0x01: Error when receiving package;
-///     0x02: Can't detect finger;
-///     0x03: Fail to collect finger;
-/// Instuction code: 0x01
-pub fn gen_img() -> ConfirmationCode {
-    todo!()
-}
-
-/// I don't know if this function still exists.
-/// To generate character file from image - Img2Tz
-/// Description: to generate character file from the original finger image in ImageBuffer and store the file in CharBuffer1 or CharBuffer2.
-/// Input Parameter: BufferID (character file buffer number)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Generate character file complete;
-///     0x01: Error when receiving package;
-///     0x06: Fail to generate character file due to the over-disorderly fingerprint image;
-///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
-///     0x15: Fail to generate the image for the lackness of valid primary image;
-/// Instuction code: 0x02
-pub fn img2_tz(_buffer_id: BufferID) -> ConfirmationCode {
-    todo!()
-}
-
-/// Upload image - UpImage
-/// Description: to upload the image in Img_Buffer to upper computer.
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Ready to transfer the following data packet;
-///     0x01: Error when receiving package;
-///     0x0F: Fail to transfer the following data packet;
-/// Instuction code: 0x0A
-/// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
-/// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-pub fn up_image() -> (ConfirmationCode, ImageData) {
-    todo!()
-}
-
-/// Download the image - DownImage
-/// Description: to download image from upper computer to Img_Buffer.
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Ready to transfer the following data packet;
-///     0x01: Error when receiving package;
-///     0x0E: Fail to transfer the following data packet;
-/// Instuction code: 0x0B
-/// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
-/// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-pub fn down_image(_image: ImageData) -> ConfirmationCode {
-    todo!()
-}
-
 #[repr(u8)]
 #[derive(Default)]
 pub enum BufferID {
@@ -721,137 +1246,7 @@ pub enum BufferID {
     CharBuffer6 = 0x06,
 }
 
-/// To generate character file from image - GenChar
-/// Description: to generate character file from the original finger image in ImageBuffer
-/// Input Parameter: BufferID (character file buffer number)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Generate character file complete;
-///     0x01: Error when receiving package;
-///     0x06: Fail to generate character file due to the over-disorderly fingerprint image;
-///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
-///     0x15: Fail to generate the image for the lackness of valid primary image;
-/// Instruction code: 0x02
-pub fn gen_char() -> ConfirmationCode {
-    todo!()
-}
-
-/// To generate template - RegModel
-/// Description: To combine information of character files from CharBuffer1 and CharBuffer2 and generate a template which is stroed back in both CharBuffer1 and CharBuffer2.
-/// Input Parameter: none
-/// Return Parameter:Confirmation code (1 byte)
-///     0x00: Operation success;
-///     0x01: Error when receiving package;
-///     0x0A: Fail to combine the character files. That's, the character files don't belong to one finger.
-/// Instuction code: 0x05
-pub fn reg_model() -> ConfirmationCode {
-    todo!()
-}
-
-/// To upload character or template - UpChar
-/// Description: Upload the data in the template buffer ModelBuffer to the upper computer.
-/// Input Parameter: BufferID (Buffer number)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Ready to transfer the following data packet;
-///     0x01: Error when receiving package;
-///     0x0D: Eerror when uploading template;
-///     0x0F: Can not receive the following data packet;
-/// Instuction code: 0x08
-/// Note: This command don't need to use the CharBufferID, so the CharBufferID can be any value between 1 and 6.
-/// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
-/// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-/// Note: The instruction doesn't affect buffer contents.
-pub fn up_char(_buffer_id: BufferID) -> ConfirmationCode {
-    todo!()
-}
-
-/// Download template - DownChar
-/// Description: upper computer download template to module buffer
-/// Input Parameter: CharBufferID (Buffer number)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Ready to transfer the following data packet;
-///     0x01: Error when receiving package;
-///     0x0E: Can not receive the following data packet
-/// Instuction code: 0x09
-/// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
-/// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-/// Note: The instruction doesn't affect buffer contents.
-pub fn down_char(_buffer_id: BufferID, _template: CharacterData) -> ConfirmationCode {
-    todo!()
-}
-
-/// To store template - Store
-/// Description: to store the template of specified buffer (Buffer1/Buffer2) at the designated location of Flash library.
-/// Input Parameter: CharBufferID, ModelID
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Storage success;
-///     0x01: Error when receiving package;
-///     0x0B: Addressing ModelID is beyond the finger library;
-///     0x18: Error when writing Flash.
-/// Instuction code: 0x06
-/// Note: CharBufferID is filled with 0x01
-pub fn store(_buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode {
-    // TODO: This one is a little funky. _model_id param expects a [u8; 2].
-    // The first byte being the page number, (0-3)
-    // The second byte being the index in that page. (0-255)
-    todo!()
-}
-
-/// To read template from Flash library - LoadChar
-/// Description: to load template at the specified location (PageID) of Flash library to template buffer CharBuffer1/CharBuffer2
-/// Input Parameter: CharBufferID, ModelID
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Load success;
-///     0x01: Error when receiving package;
-///     0x0C: Error when reading template from library or the readout template is invalid;
-///     0x0B: Addressing ModelID is beyond the finger library;
-/// Instuction code: 07H
-/// Note: CharBufferID is filled with 0x01
-pub fn load_char(_buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode {
-    // TODO: This one is a little funky. _model_id param expects a [u8; 2].
-    // The first byte being the page number, (0-3)
-    // The second byte being the index in that page. (0-255)
-    todo!()
-}
-
-/// To delete template - DeletChar
-/// Description: to delete a segment (N) of templates of Flash library started from the specified location (or PageID);
-/// Input Parameter: StartID + Num
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Delete success;
-///     0x01: Error when receiving package;
-///     0x10: Failed to delete templates;
-///     0x18: Error when write FLASH;
-/// Instuction code: 0x0C
-pub fn delete_char(_start_id: BufferID, _num: u8) -> ConfirmationCode {
-    todo!()
-}
-
-/// To empty finger library - Empty
-/// Description: to delete all the templates in the Flash library
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Empty success;
-///     0x01: Error when receiving package;
-///     0x11: Fail to clear finger library;
-///     0x18: Error when write FLASH;
-/// Instuction code: 0x0D
-pub fn empty() -> ConfirmationCode {
-    todo!()
-}
-
 type MatchScore = u16;
-/// To carry out precise matching of two finger templates - Match
-/// Description: Compare the recently extracted character with the templates in the ModelBuffer, providing matching results.
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)，matching score.
-///     0x00: templates of the two buffers are matching!
-///     0x01: error when receiving package;
-///     0x08: templates of the two buffers aren't matching;
-/// Instuction code: 0x03
-/// Note: The instruction doesn't affect the contents of the buffers.
-pub fn r#match() -> (ConfirmationCode, MatchScore) {
-    todo!()
-}
 
 #[allow(dead_code)]
 pub struct PageIndex {
@@ -859,99 +1254,9 @@ pub struct PageIndex {
     entry: u8,
 }
 
-/// To search finger library - Search
-/// Description: to search the whole finger library for the template that matches the one in CharBuffer1 or CharBuffer2. When found, PageID will be returned.
-/// Input Parameter: CharBufferID + StartID + Num
-/// Return Parameter: Confirmation code + ModelID (template number) + MatchScore
-///     0x00: found the matching finer;
-///     0x01: error when receiving package;
-///     0x09: No matching in the library (both the PageID and matching score are 0);
-/// Instuction code: 0x04
-/// Note: The instruction doesn't affect the contents of the buffers.
-pub fn search(
-    _buffer_id: BufferID,
-    _start_page: u16,
-    _num: u16,
-) -> (ConfirmationCode, u16, MatchScore) {
-    todo!()
-}
-
-/// Fingerprint image collection extension command - GetImageEx(0x28)
-/// Description: Detect the finger, record the fingerprint image and store it in ImageBuffer, return it and record the successful confirmation code; If no finger is detected, return no finger confirmation code (the module responds quickly to each instruction, therefore, for continuous detection, cycle processing is required, which can be limited to the number of cycles or the total time).
-/// Differences between GetImageEx and the GetImage:
-///     GetImage: return the confirmation code 0x00 when the image quality is too bad (image collection succeeded)
-///     GetImageEx: return the confirmation code 0x07 when the image quality is too bad (poor collection quality)
-/// Input Parameter: none
-/// Return Parameter: Confirmation code
-///     0x00: Read success
-///     0x01: Error when receiving package;
-///     0x02: No fingers on the sensor;
-///     0x03: Unsuccessful entry
-///     0x07: Poor image quality;
-/// Instuction code: 0x28
-pub fn get_image_ex() -> ConfirmationCode {
-    todo!()
-}
-
-/// Cancel instruction - Cancel(0x30)
-/// Description: Cancel instruction
-/// Input Parameter: none
-/// Return Parameter: Confirmation code
-///     0x00: Cancel setting successful;
-///     other: Cancel setting failed;
-/// Instuction code: 0x30
-pub fn cancel() -> ConfirmationCode {
-    todo!()
-}
-
-/// HandShake - HandShake(0x40)
-/// Description: Send handshake instructions to the module. If the module works normally, the confirmation code 0x00 will be returned. The upper computer can continue to send instructions to the module.If the confirmation code is other or no reply, it means that the device is abnormal.
-/// Input Parameter: none
-/// Return Parameter: Confirmation code
-///     0x00: The device is normal and can receive instructions;
-///     other: The device is abnormal.
-/// Instuction code: 0x40
-///     In addition, after the module is powered on, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
-pub fn handshake() -> ConfirmationCode {
-    todo!()
-}
-
-/// CheckSensor - CheckSensor (0x36)
-/// Description: Check whether the sensor is normal
-/// Input Parameter: none
-/// Return Parameter: Confirmation code
-///     0x00: The sensor is normal;
-///     0x29: the sensor is abnormal;
-/// Instuction code: 0x36
-pub fn check_sensor() -> ConfirmationCode {
-    todo!()
-}
-
 pub type AlgVer = u32;
 
-/// Get the algorithm library version - GetAlgVer (0x39)
-/// Description: Get the algorithm library version
-/// Input Parameter: none
-/// Return Parameter: Confirmation code+AlgVer(algorithm library version string)
-///     0x00: Success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x39
-pub fn get_alg_ver() -> (ConfirmationCode, AlgVer) {
-    todo!()
-}
-
 pub type FwVer = u32;
-
-/// Get the firmware version - GetFwVer (0x3A)
-/// Description: Get the firmware version
-/// Input Parameter: none
-/// Return Parameter: Confirmation code+FwVer(Firmware version string)
-///     0x00: Success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x3A
-pub fn get_fw_ver() -> (ConfirmationCode, FwVer) {
-    todo!()
-}
 
 /// Product information: store in the following order. For Numbers, the high byte comes first. For a string, the insufficient part is 0x00.
 #[derive(Default)]
@@ -975,29 +1280,6 @@ pub struct ProdInfo {
     tmpl_size: u16,
     /// Fingerprint database size
     tmpl_total: u16,
-}
-
-/// Read product information - ReadProdInfo (0x3C)
-/// Description: Read product information
-/// Input Parameter: none
-/// Return Parameter: Confirmation code+ProdInfo(product information)
-///     0x00: Success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x3C
-pub fn read_prod_info() -> (ConfirmationCode, ProdInfo) {
-    todo!()
-}
-
-/// Soft reset SoftRst (0x3D)
-/// Description: Send soft reset instruction to the module. If the module works normally, return confirmation code 0x00, and then perform reset operation.
-/// Input Parameter: none
-/// Return Parameter: Confirmation code
-///     0x00: Success;
-///     other: Device is abnormal
-/// Instuction code: 0x3D
-///     After module reset, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
-pub fn soft_rst() -> ConfirmationCode {
-    todo!()
 }
 
 #[repr(u8)]
@@ -1041,27 +1323,6 @@ impl From<Color> for u8 {
 /// It is effective for with breathing light and flashing light.
 type Times = u8;
 
-/// Aura control - AuraLedConfig (0x35)
-/// Description: Aura LED control
-/// Input Parameter: Control code: Ctrl; Speed; ColorIndex; Times
-/// Return Parameter: Confirmation code
-///     0x00: Success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x35
-pub fn aura_led_config(
-    ctrl: LightPattern,
-    speed: Speed,
-    color_index: Color,
-    count: Times,
-) -> ConfirmationCode {
-    let mut packet: [u8; 16] = [0x00; 16];
-    packet[10] = ctrl.into();
-    packet[11] = speed;
-    packet[12] = color_index.into();
-    packet[13] = count;
-    todo!()
-}
-
 #[allow(dead_code)]
 enum Paramater1 {
     /// 0x01: Collect image for the first time
@@ -1099,39 +1360,6 @@ enum Paramater1 {
     StoreTemplates = 0x0F,
 }
 
-/// Automatic registration template - AutoEnroll (0x31)
-/// Description: When a fingerprint is recorded using an automatic registration template, the fingerprint image needs to be recorded six times for each fingerprint template. The blue light blinks when the fingerprint image is collected. The yellow light is on means the fingerprint image is collected successfully,the green light blinks means the fingerprint characteristic is generated successfully. If the finger is required to leave during image collection, the image will be collected again after the finger is lifted. During the process of waiting for the finger to leave, the white light flashes. After fingerprint images are collected for 6 times and features are generated successfully, features are synthesized and store fingerprint template. If the operation succeeds, the green light is on; if the operation fails, the red light is on. If the finger is away from the sensor for more than 10 seconds when in collecting the fingerprint image each time, it will automatically exits the automatic template registration process.
-/// Input Paramater: ModelID (Fingerprint library location number)
-///     Config1: Whether to allow cover ID number
-///         Whether to allow cover ID number: 0: Not allowed 1: Allow
-///     Config2: Whether to allow duplicate fingerprints
-///         Whether to allow register duplicate fingerprints: 0: Not allowed 1: Allow
-///     Config3: Whether the module return the status in the critical step
-///         Whether to return to the critical step status during registration: 0: Not allowed 1: Allow
-///     Config4: Whether to allow ask the finger to leave
-///         Whether the finger is required to leave during the registration process in order to enter the next fingerprint image collection: 0: don't need to leave 1: have to leave
-/// Return Parameter: Confirmation code + ModelID (Fingerprint library location number)
-/// Instruction code: 0x31
-///     0x00: Set successfully;
-///     0x01: Set fails;
-///     0x07: Failed to generate a feature;
-///     0x0a: Failed to merge templates;
-///     0x0b: The ID is out of range;
-///     0x1f: Fingerprint library is full;
-///     0x22: Fingerprint template is empty;
-///     0x26: Times out;
-///     0x27: Fingerprint already exists;
-/// Note: Model ID: Location ID : 0-0xC7, 0xC8-0xFF is automatic filling (The ID number is assigned by the system; The system will be starting from template 0 to searches the empty templates.)
-pub fn auto_enroll(
-    _model_id: IndexPage,
-    _allow_cover_id: bool,
-    _allow_duplicate: bool,
-    _return_in_critical: bool,
-    _ask_finger_to_leave: bool,
-) -> (ConfirmationCode, IndexPage) {
-    todo!()
-}
-
 pub enum SafeGrade {
     Low = 1,
     LowMid = 2,
@@ -1139,97 +1367,7 @@ pub enum SafeGrade {
     HighMid = 4,
     High = 5,
 }
-
-/// Automatic fingerprint verification - AutoIdentify (0x32)
-/// Description: When the automatic fingerprint verification command is used to search and verify a fingerprint, the system automatically collects a fingerprint image and generates features, and compares the image with the fingerprint template in the fingerprint database. If the comparison is successful, the system returns the template ID number and the comparison score. If the comparison fails, the system returns the corresponding error code.
-///              When obtaining the fingerprint image, the fingerprint head will light up with a white breathing light. After the image collection is successful, the yellow light will light up, and the green light will light up after the comparison is successful. If there is a fingerprint image collection error or no fingerprint search, the red light will be on to prompt.
-///              If the system does not detect the finger for more than 10 seconds after sending the command or collecting the fingerprint image again after reporting an error, it will automatically exit the command.
-/// Input Paramater: SafeGrade (1-5 level)
-///                  StartPos (0-199)
-///                  Num - Number of searches (0-199)
-///                  Config1 - Whether the module returns to the status in key steps
-///                  Config2 - Number of fingerprint search error
-/// Return Parameter: Confirmation code + ModelID + MarchScore
-///     0x00: Set successfully;
-///     0x01: Set fails;
-///     0x09: Failed to search fingerprint;
-///     0x0b: The ID is out of range;
-///     0x22: Fingerprint template is empty;
-///     0x24: Fingerprint library is empty;
-///     0x26: Times out;
-/// Instruction code: 0x32
-pub fn auto_identify(
-    _safe_grade: SafeGrade,
-    _start: u8,
-    _num: u8,
-    _search_times: u8,
-    _return_in_critical: bool,
-) -> (ConfirmationCode, IndexPage, MatchScore) {
-    todo!()
-}
-
-// # Other instructions
-
-/// To generate a random code - GetRandomCode
-/// Description: to command the Module to generate a random number and return it to upper computer;Refer to 4.8 for more about Random Number Generator;
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Generation success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x14
-pub fn get_random_code() -> (ConfirmationCode, u32) {
-    let _packet: Package = Package {
-        identifier: Identifier::Command,
-        length: 4,
-        contents: Data {
-            instruction: Instruction::GetRandomCode,
-        },
-        checksum: Sum::default(),
-        ..Default::default()
-    };
-
-    (ConfirmationCode::Success, 4 /* Fair Dice Roll */)
-}
-
 pub type Page = [u8; 512];
-
-/// To read information page - ReadInfPage
-/// Description: read information page (512bytes)
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Ready to transfer the following data packet;
-///     0x01: Error when receiving package;
-///     0x0F: Can not transfer the following data packet;
-/// Instuction code: 0x16
-/// Note: Module shall transfer following data packet after responding to the upper computer;
-/// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery;
-/// Note: The instruction doesn't affect buffer contents;
-pub fn read_inf_page() -> (ConfirmationCode, Page) {
-    todo!()
-}
-
-/// To write note pad - WriteNotepad
-/// Description: For upper computer to write data to the specified Flash page; Also see ReadNotepad;
-/// Input Parameter: NotePageNum, user content (or data content)
-/// Return Parameter: Confirmation code (1 byte)
-///     0x00: Write success;
-///     0x01: Error when receiving package;
-///     0x18: Error when write FLASH;
-/// Instuction code: 0x18
-pub fn write_notepad(_note_page_number: u8, _content: Page) {
-    todo!()
-}
-
-/// To read note pad - ReadNotepad
-/// Description: To read the specified page's data content; Also see WriteNotepad.
-/// Input Parameter: none
-/// Return Parameter: Confirmation code (1 byte) + data content
-///     0x00: Read success;
-///     0x01: Error when receiving package;
-/// Instuction code: 0x19
-pub fn read_notepad(_note_page_number: u8, _content: Page) {
-    todo!()
-}
 
 /// # Instructions Table
 #[repr(u8)]
@@ -1288,6 +1426,10 @@ pub enum Instruction {
     GetImageEx = 0x28,
     /// Cancel instruction
     Cancel = 0x30,
+    /// Automatic registration template
+    AutoEnroll = 0x31,
+    /// Automatic fingerprint verification
+    AutoIdentify = 0x32,
     /// Aura Control
     AuraLedConfig = 0x35,
     /// Check Sensor
@@ -1300,21 +1442,4 @@ pub enum Instruction {
     SoftRst = 0x3D,
     /// Hand Shake
     HandShake = 0x40,
-}
-
-// # Internal Functions
-
-#[inline]
-pub fn get_u16_as_u16_parts(value: u16) -> [u16; 2] {
-    [value >> 8, value & 0xFF]
-}
-
-#[inline]
-pub fn get_u32_as_u16_parts(value: u32) -> [u16; 4] {
-    [
-        (value >> 24 & 0xFF) as u16,
-        (value >> 16 & 0xFF) as u16,
-        (value >> 8 & 0xFF) as u16,
-        (value & 0xFF) as u16,
-    ]
 }

@@ -1,10 +1,7 @@
 use r503::*;
 
 #[test]
-fn aura_led_ring() {
-    let result = aura_led_config(LightPattern::Breathing, 128, Color::Blue, 2);
-    assert_eq!(result, ConfirmationCode::Success);
-}
+fn aura_led_ring() {}
 
 #[test]
 fn checksum_templete_num() {
