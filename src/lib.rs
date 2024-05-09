@@ -514,11 +514,11 @@ impl ConfirmationCode {
 // # 5. Module Instruction System
 // R30X series provide 23 instructions. R50X series provide 33 instructions. Through combination of different instructions, application program may realize muti finger authentication functions. All commands/data are transferred in package format. Refer to 5.1 for the detailed information of package.
 
-impl<UART> Driver<UART> {
-    pub fn new(&mut self, uart: UART, address: Option<Address>) -> &mut Self
-    where
-        UART: Read + Write,
-    {
+impl<UART> Driver<UART>
+where
+    UART: Read + Write,
+{
+    pub fn new(&mut self, uart: UART, address: Option<Address>) -> &mut Self {
         self.uart = uart;
         self.packet.address = match address {
             Some(address) => address,
@@ -537,10 +537,7 @@ impl<UART> Driver<UART> {
     ///     0x01: Error when receiving package;
     ///     0x13: Wrong password;
     /// Instruction code: 0x13
-    pub fn vfy_pwd(&mut self, _password: Password) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn vfy_pwd(&mut self, _password: Password) -> ConfirmationCode {
         let _pw = PASSWORD;
         todo!()
     }
@@ -554,10 +551,7 @@ impl<UART> Driver<UART> {
     ///     0x18: Error when writing FLASH;
     ///     0x21: Have to verify password;
     /// Instruction code: 0x12
-    pub fn set_pwd(&mut self, _password: Password) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn set_pwd(&mut self, _password: Password) -> ConfirmationCode {
         todo!()
     }
 
@@ -569,10 +563,7 @@ impl<UART> Driver<UART> {
     ///     0x01: Error when receiving package;
     ///     0x18: Error when writing FLASH;
     /// Instruction code: 0x15
-    pub fn set_adder(&mut self, _address: Address) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn set_adder(&mut self, _address: Address) -> ConfirmationCode {
         todo!()
     }
 
@@ -585,10 +576,7 @@ impl<UART> Driver<UART> {
     ///     0x18: Error when writing FLASH;
     ///     0x1A: Wrong register number;
     /// Instruction code: 0x0E
-    pub fn set_sys_para(&mut self, _parameter: ParameterSetting, _content: u8) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn set_sys_para(&mut self, _parameter: ParameterSetting, _content: u8) -> ConfirmationCode {
         todo!()
     }
 
@@ -600,10 +588,7 @@ impl<UART> Driver<UART> {
     ///     0x01: Error when receiving package;
     ///     0x18: Error when writing FLASH;
     /// Instuction code: 0x0F
-    pub fn read_sys_para(&mut self) -> (ConfirmationCode, BasicParameters)
-    where
-        UART: Read + Write,
-    {
+    pub fn read_sys_para(&mut self) -> (ConfirmationCode, BasicParameters) {
         todo!()
     }
 
@@ -614,10 +599,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Read success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x1D
-    pub fn templete_num(&mut self) -> (ConfirmationCode, u8)
-    where
-        UART: Read + Write,
-    {
+    pub fn templete_num(&mut self) -> (ConfirmationCode, u8) {
         todo!()
     }
 
@@ -628,10 +610,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Read complete;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x1F
-    pub fn read_index_table(&mut self, _index_page: IndexPage) -> (ConfirmationCode, IndexTable)
-    where
-        UART: Read + Write,
-    {
+    pub fn read_index_table(&mut self, _index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
         todo!()
     }
 
@@ -649,10 +628,7 @@ impl<UART> Driver<UART> {
     ///     0x02: Can't detect finger;
     ///     0x03: Fail to collect finger;
     /// Instuction code: 0x01
-    pub fn gen_img(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn gen_img(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -667,10 +643,7 @@ impl<UART> Driver<UART> {
     ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
     ///     0x15: Fail to generate the image for the lackness of valid primary image;
     /// Instuction code: 0x02
-    pub fn img2_tz(&mut self, _buffer_id: BufferID) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn img2_tz(&mut self, _buffer_id: BufferID) -> ConfirmationCode {
         todo!()
     }
 
@@ -684,10 +657,7 @@ impl<UART> Driver<UART> {
     /// Instuction code: 0x0A
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-    pub fn up_image(&mut self) -> (ConfirmationCode, ImageData)
-    where
-        UART: Read + Write,
-    {
+    pub fn up_image(&mut self) -> (ConfirmationCode, ImageData) {
         todo!()
     }
 
@@ -701,10 +671,7 @@ impl<UART> Driver<UART> {
     /// Instuction code: 0x0B
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-    pub fn down_image(&mut self, _image: ImageData) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn down_image(&mut self, _image: ImageData) -> ConfirmationCode {
         todo!()
     }
 
@@ -718,10 +685,7 @@ impl<UART> Driver<UART> {
     ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
     ///     0x15: Fail to generate the image for the lackness of valid primary image;
     /// Instruction code: 0x02
-    pub fn gen_char(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn gen_char(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -733,10 +697,7 @@ impl<UART> Driver<UART> {
     ///     0x01: Error when receiving package;
     ///     0x0A: Fail to combine the character files. That's, the character files don't belong to one finger.
     /// Instuction code: 0x05
-    pub fn reg_model(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn reg_model(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -753,10 +714,7 @@ impl<UART> Driver<UART> {
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     /// Note: The instruction doesn't affect buffer contents.
-    pub fn up_char(&mut self, _buffer_id: BufferID) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn up_char(&mut self, _buffer_id: BufferID) -> ConfirmationCode {
         todo!()
     }
 
@@ -771,10 +729,11 @@ impl<UART> Driver<UART> {
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     /// Note: The instruction doesn't affect buffer contents.
-    pub fn down_char(&mut self, _buffer_id: BufferID, _template: CharacterData) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn down_char(
+        &mut self,
+        _buffer_id: BufferID,
+        _template: CharacterData,
+    ) -> ConfirmationCode {
         todo!()
     }
 
@@ -788,10 +747,7 @@ impl<UART> Driver<UART> {
     ///     0x18: Error when writing Flash.
     /// Instuction code: 0x06
     /// Note: CharBufferID is filled with 0x01
-    pub fn store(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn store(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode {
         // TODO: This one is a little funky. _model_id param expects a [u8; 2].
         // The first byte being the page number, (0-3)
         // The second byte being the index in that page. (0-255)
@@ -808,10 +764,7 @@ impl<UART> Driver<UART> {
     ///     0x0B: Addressing ModelID is beyond the finger library;
     /// Instuction code: 07H
     /// Note: CharBufferID is filled with 0x01
-    pub fn load_char(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn load_char(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode {
         // TODO: This one is a little funky. _model_id param expects a [u8; 2].
         // The first byte being the page number, (0-3)
         // The second byte being the index in that page. (0-255)
@@ -827,10 +780,7 @@ impl<UART> Driver<UART> {
     ///     0x10: Failed to delete templates;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x0C
-    pub fn delete_char(&mut self, _start_id: BufferID, _num: u8) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn delete_char(&mut self, _start_id: BufferID, _num: u8) -> ConfirmationCode {
         todo!()
     }
 
@@ -843,10 +793,7 @@ impl<UART> Driver<UART> {
     ///     0x11: Fail to clear finger library;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x0D
-    pub fn empty(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn empty(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -859,10 +806,7 @@ impl<UART> Driver<UART> {
     ///     0x08: templates of the two buffers aren't matching;
     /// Instuction code: 0x03
     /// Note: The instruction doesn't affect the contents of the buffers.
-    pub fn r#match(&mut self) -> (ConfirmationCode, MatchScore)
-    where
-        UART: Read + Write,
-    {
+    pub fn r#match(&mut self) -> (ConfirmationCode, MatchScore) {
         todo!()
     }
 
@@ -880,10 +824,7 @@ impl<UART> Driver<UART> {
         _buffer_id: BufferID,
         _start_page: u16,
         _num: u16,
-    ) -> (ConfirmationCode, u16, MatchScore)
-    where
-        UART: Read + Write,
-    {
+    ) -> (ConfirmationCode, u16, MatchScore) {
         todo!()
     }
 
@@ -900,10 +841,7 @@ impl<UART> Driver<UART> {
     ///     0x03: Unsuccessful entry
     ///     0x07: Poor image quality;
     /// Instuction code: 0x28
-    pub fn get_image_ex(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn get_image_ex(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -914,10 +852,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Cancel setting successful;
     ///     other: Cancel setting failed;
     /// Instuction code: 0x30
-    pub fn cancel(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn cancel(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -929,10 +864,7 @@ impl<UART> Driver<UART> {
     ///     other: The device is abnormal.
     /// Instuction code: 0x40
     ///     In addition, after the module is powered on, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
-    pub fn handshake(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn handshake(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -943,10 +875,7 @@ impl<UART> Driver<UART> {
     ///     0x00: The sensor is normal;
     ///     0x29: the sensor is abnormal;
     /// Instuction code: 0x36
-    pub fn check_sensor(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn check_sensor(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -957,10 +886,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x39
-    pub fn get_alg_ver(&mut self) -> (ConfirmationCode, AlgVer)
-    where
-        UART: Read + Write,
-    {
+    pub fn get_alg_ver(&mut self) -> (ConfirmationCode, AlgVer) {
         todo!()
     }
 
@@ -971,10 +897,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x3A
-    pub fn get_fw_ver(&mut self) -> (ConfirmationCode, FwVer)
-    where
-        UART: Read + Write,
-    {
+    pub fn get_fw_ver(&mut self) -> (ConfirmationCode, FwVer) {
         todo!()
     }
 
@@ -985,10 +908,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x3C
-    pub fn read_prod_info(&mut self) -> (ConfirmationCode, ProdInfo)
-    where
-        UART: Read + Write,
-    {
+    pub fn read_prod_info(&mut self) -> (ConfirmationCode, ProdInfo) {
         todo!()
     }
 
@@ -1000,10 +920,7 @@ impl<UART> Driver<UART> {
     ///     other: Device is abnormal
     /// Instuction code: 0x3D
     ///     After module reset, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
-    pub fn soft_rst(&mut self) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn soft_rst(&mut self) -> ConfirmationCode {
         todo!()
     }
 
@@ -1020,10 +937,7 @@ impl<UART> Driver<UART> {
         speed: Speed,
         color_index: Color,
         count: Times,
-    ) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    ) -> ConfirmationCode {
         let mut packet: [u8; 16] = [0x00; 16];
         packet[10] = ctrl.into();
         packet[11] = speed;
@@ -1062,10 +976,7 @@ impl<UART> Driver<UART> {
         _allow_duplicate: bool,
         _return_in_critical: bool,
         _ask_finger_to_leave: bool,
-    ) -> (ConfirmationCode, IndexPage)
-    where
-        UART: Read + Write,
-    {
+    ) -> (ConfirmationCode, IndexPage) {
         todo!()
     }
 
@@ -1094,10 +1005,7 @@ impl<UART> Driver<UART> {
         _num: u8,
         _search_times: u8,
         _return_in_critical: bool,
-    ) -> (ConfirmationCode, IndexPage, MatchScore)
-    where
-        UART: Read + Write,
-    {
+    ) -> (ConfirmationCode, IndexPage, MatchScore) {
         todo!()
     }
 
@@ -1110,10 +1018,7 @@ impl<UART> Driver<UART> {
     ///     0x00: Generation success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x14
-    pub fn get_random_code(&mut self) -> (ConfirmationCode, u32)
-    where
-        UART: Read + Write,
-    {
+    pub fn get_random_code(&mut self) -> (ConfirmationCode, u32) {
         let _packet: Package = Package {
             identifier: Identifier::Command,
             length: 4,
@@ -1138,10 +1043,7 @@ impl<UART> Driver<UART> {
     /// Note: Module shall transfer following data packet after responding to the upper computer;
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery;
     /// Note: The instruction doesn't affect buffer contents;
-    pub fn read_inf_page(&mut self) -> (ConfirmationCode, Page)
-    where
-        UART: Read + Write,
-    {
+    pub fn read_inf_page(&mut self) -> (ConfirmationCode, Page) {
         todo!()
     }
 
@@ -1153,10 +1055,7 @@ impl<UART> Driver<UART> {
     ///     0x01: Error when receiving package;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x18
-    pub fn write_notepad(&mut self, _note_page_number: u8, _content: Page) -> ConfirmationCode
-    where
-        UART: Read + Write,
-    {
+    pub fn write_notepad(&mut self, _note_page_number: u8, _content: Page) -> ConfirmationCode {
         todo!()
     }
 
@@ -1171,10 +1070,7 @@ impl<UART> Driver<UART> {
         &mut self,
         _note_page_number: u8,
         _content: Page,
-    ) -> (ConfirmationCode, Page)
-    where
-        UART: Read + Write,
-    {
+    ) -> (ConfirmationCode, Page) {
         todo!()
     }
 }
