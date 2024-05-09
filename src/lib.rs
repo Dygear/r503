@@ -1,4 +1,57 @@
 #![no_std]
+use core::mem::size_of;
+use embedded_io_async::{Read, Write};
+
+pub struct Driver<UART: Read + Write> {
+    pub uart: UART,
+
+    pub header: Header,
+    pub address: Address,
+    pub identifier: Identifier,
+    pub length: Length,
+    pub contents: Data,
+    pub checksum: Sum,
+}
+
+impl<UART: Read + Write> Driver<UART> {
+    pub fn new(&mut self, uart: UART, address: Option<Address>) -> &mut Self {
+        self.uart = uart;
+        self.address = match address {
+            Some(address) => address,
+            None => ADDRESS,
+        };
+        self
+    }
+
+    pub fn length(&mut self) -> Length {
+        let mut length: Length = 0;
+        length += size_of::<Header>() as u16;
+        length += size_of::<Address>() as u16;
+        length += size_of::<Identifier>() as u16;
+        length += size_of::<Length>() as u16;
+        // TODO: We actually want to call self.data.len() to get the length that way.
+        // Right now, this is going to give the max size of a variant of Data.
+        length += size_of::<Data>() as u16;
+        length += size_of::<Sum>() as u16;
+        assert!(length <= 256);
+
+        self.length = length;
+        length
+    }
+
+    pub fn checksun(&mut self) -> Sum {
+        let mut checksum: Sum = 0;
+        // Identifier
+        checksum = checksum.wrapping_add(self.identifier as u16);
+        // Length
+        checksum = checksum.wrapping_add(get_u16_as_u16_parts(self.length)[0]);
+        checksum = checksum.wrapping_add(get_u16_as_u16_parts(self.length)[1]);
+        // TODO: Contents
+
+        self.checksum = checksum;
+        checksum
+    }
+}
 
 // DOCUMENTATION: R503 https://cdn-shop.adafruit.com/product-files/4651/4651_R503%20fingerprint%20module%20user%20manual.pdf
 // DOUCMENTATION: R302 https://file.vishnumaiea.in/ds/module/biometric/R302-Fingerprint-Module-User-Manual.pdf
@@ -174,12 +227,14 @@ impl SystemRegister {
 /// The default password of the module is `0x00000000``. If the default password is modified, the first instruction of the upper computer to communicate with the module must be verify password. Only after the password verification is passed, the module will enter the normal working state and receive other instructions.
 /// The new modified password is stored in Flash and remains at power off.(the modified password cannot be obtained through the communication instruction. If forgotten by mistake, the module cannot communicate, please use with caution)
 /// Refer to instruction SetPwd and VfyPwd.
-const PASSWORD: u32 = 0x00000000;
+pub type Password = u32;
+const PASSWORD: Password = 0x00000000;
 
 /// ## Module address
 /// Each module has an identifying address. When communicating with upper computer, each instruction/data is transferred in data package form, which contains the address item. Module system only responds to data package whose address item value is the same with its identifying address.
 /// The address length is 4 bytes, and its default factory value is 0xFFFFFFFF. User may modify the address via instruction SetAdder. The new modified address remains at power off.
-const ADDRESS: u32 = 0xFFFFFFFF;
+pub type Address = u32;
+const ADDRESS: Address = 0xFFFFFFFF;
 
 // ## Random number generator
 // Module integrates a hardware 32-bit random number generator (RNG) (without seed). Via instruction GetRandomCode, system will generate a random number and upload it.
@@ -204,7 +259,8 @@ const ADDRESS: u32 = 0xFFFFFFFF;
 /// Symbol: Start
 /// Length: 2 Bytes
 /// Description: Fixed value of 0xEF01; High byte transferred first.
-const HEADER: u16 = 0xEF01;
+pub type Header = u16;
+const HEADER: Header = 0xEF01;
 // Name: Adder
 // Symbol: ADDER
 // Length: 2 Bytes
@@ -237,12 +293,12 @@ pub type Length = u16;
 // Symbol: DATA
 // Length: -
 // Description: It can be commands, data, command's parameters, acknowledge result, etc. (fingerprint character value, template are all deemed as data);
-pub struct Payload {
+pub struct Data {
     /// The first and maybe only thing is the instruction
     pub instruction: Instruction,
 }
 
-impl Default for Payload {
+impl Default for Data {
     fn default() -> Self {
         Self {
             instruction: Instruction::SoftRst,
@@ -266,7 +322,7 @@ pub struct Package {
     /// See Name: Package length
     length: Length,
     /// See Name: Package contents
-    contents: Payload,
+    contents: Data,
     /// See Name: Checksum
     checksum: Sum,
 }
@@ -295,10 +351,10 @@ impl Package {
     pub fn set_length(&mut self, len: Length) {
         self.length = len;
     }
-    pub fn get_contents(&self) -> &Payload {
+    pub fn get_contents(&self) -> &Data {
         &self.contents
     }
-    pub fn set_contents(&mut self, contents: Payload) {
+    pub fn set_contents(&mut self, contents: Data) {
         self.contents = contents;
     }
     pub fn get_checksum(&self) -> &Sum {
@@ -331,7 +387,7 @@ impl Default for Package {
             address: ADDRESS,
             identifier: Identifier::Acknowledge,
             length: 12,
-            contents: Payload::default(),
+            contents: Data::default(),
             checksum: Sum::default(),
         }
     }
@@ -927,7 +983,7 @@ impl From<LightPattern> for u8 {
 pub type Speed = u8;
 
 #[repr(u8)]
-pub enum ColorIndex {
+pub enum Color {
     Red = 0b0000_0001,    // 0x01,
     Blue = 0b0000_0010,   // 0x02,
     Purple = 0b0000_0011, // 0x03,
@@ -937,8 +993,8 @@ pub enum ColorIndex {
     White = 0b0000_0111,  // 0x07,
 }
 
-impl From<ColorIndex> for u8 {
-    fn from(item: ColorIndex) -> Self {
+impl From<Color> for u8 {
+    fn from(item: Color) -> Self {
         item as u8
     }
 }
@@ -957,7 +1013,7 @@ type Times = u8;
 pub fn aura_led_config(
     ctrl: LightPattern,
     speed: Speed,
-    color_index: ColorIndex,
+    color_index: Color,
     count: Times,
 ) -> ConfirmationCode {
     let mut packet: [u8; 16] = [0x00; 16];
@@ -981,7 +1037,7 @@ pub fn get_random_code() -> ConfirmationCode {
     let _packet: Package = Package {
         identifier: Identifier::Command,
         length: 4,
-        contents: Payload {
+        contents: Data {
             instruction: Instruction::GetRandomCode,
         },
         checksum: Sum::default(),
