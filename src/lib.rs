@@ -285,12 +285,56 @@ pub type Length = u16;
 pub struct Data {
     /// The first and maybe only thing is the instruction
     pub instruction: Instruction,
+    /// The payload of the document.
+    pub payload: Payload,
+}
+
+#[allow(clippy::large_enum_variant)]
+pub enum Payload {
+    None,
+    VfyPwd(Password),
+    SetPwd(Password),
+    SetAdder(Address),
+    SetSysPara(ParameterSetting, u8),
+    ReadSysPara,
+    TempleteNum,
+    ReadIndexTable(IndexPage),
+    GenImg,
+    Img2Tz(BufferID),
+    UpImage,
+    DownImage,
+    GenChar(BufferID),
+    RegModel,
+    UpChar(BufferID),
+    DownChar(BufferID),
+    Store(BufferID, IndexPage),
+    LoadChar(BufferID, IndexPage),
+    DeletChar(BufferID, u8),
+    Empty,
+    Match,
+    Search(BufferID, u16, u16),
+    GetImageEx,
+    Cancel,
+    HandShake,
+    CheckSensor,
+    GetAlgVer,
+    GetFwVer,
+    ReadProdInfo,
+    SoftRst,
+    AuraLedConfig(LightPattern, Speed, Color, Times),
+    AutoEnroll(IndexPage, bool, bool, bool, bool),
+    AutoIdentify(SafeGrade, u8, u8, u8, bool),
+    GetRandomCode,
+    ReadInfPage,
+    WriteNotepad(NotePageNum, Page),
+    ReadNotepad(NotePageNum),
 }
 
 impl Default for Data {
     fn default() -> Self {
         Self {
             instruction: Instruction::SoftRst,
+            payload: Payload::None,
         }
     }
 }
@@ -358,7 +402,7 @@ impl Package {
         self.contents = contents;
     }
 
-    pub fn checksun(&mut self) -> Sum {
+    pub fn checksum(&mut self) -> Sum {
         let mut checksum: Sum = 0;
         // Identifier
         checksum = checksum.wrapping_add(self.identifier as u16);
@@ -384,6 +428,8 @@ impl Default for Package {
         }
     }
 }
+
+type NotePageNum = u8;
 
 // # Check and acknowledgement of data package
 // Note: Commands shall only be sent from upper computer to the Module, and the Module acknowledges the commands.
@@ -537,8 +583,21 @@ where
     ///     0x01: Error when receiving package;
     ///     0x13: Wrong password;
     /// Instruction code: 0x13
-    pub fn vfy_pwd(&mut self, _password: Password) -> ConfirmationCode {
-        let _pw = PASSWORD;
+    pub fn vfy_pwd(&mut self, password: Option<Password>) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::VfyPwd,
+                payload: Payload::VfyPwd(match password {
+                    Some(password) => password,
+                    None => PASSWORD,
+                }),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -551,7 +610,21 @@ where
     ///     0x18: Error when writing FLASH;
     ///     0x21: Have to verify password;
     /// Instruction code: 0x12
-    pub fn set_pwd(&mut self, _password: Password) -> ConfirmationCode {
+    pub fn set_pwd(&mut self, password: Option<Password>) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::SetPwd,
+                payload: Payload::SetPwd(match password {
+                    Some(password) => password,
+                    None => PASSWORD,
+                }),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -563,7 +636,18 @@ where
     ///     0x01: Error when receiving package;
     ///     0x18: Error when writing FLASH;
     /// Instruction code: 0x15
-    pub fn set_adder(&mut self, _address: Address) -> ConfirmationCode {
+    pub fn set_adder(&mut self, address: Address) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::SetAdder,
+                payload: Payload::SetAdder(address),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -576,7 +660,18 @@ where
     ///     0x18: Error when writing FLASH;
     ///     0x1A: Wrong register number;
     /// Instruction code: 0x0E
-    pub fn set_sys_para(&mut self, _parameter: ParameterSetting, _content: u8) -> ConfirmationCode {
+    pub fn set_sys_para(&mut self, parameter: ParameterSetting, content: u8) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::SetSysPara,
+                payload: Payload::SetSysPara(parameter, content),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -589,6 +684,17 @@ where
     ///     0x18: Error when writing FLASH;
     /// Instuction code: 0x0F
     pub fn read_sys_para(&mut self) -> (ConfirmationCode, BasicParameters) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::SetSysPara,
+                payload: Payload::ReadSysPara,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -600,6 +706,17 @@ where
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x1D
     pub fn templete_num(&mut self) -> (ConfirmationCode, u8) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::TempleteNum,
+                payload: Payload::TempleteNum,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -610,7 +727,18 @@ where
     ///     0x00: Read complete;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x1F
-    pub fn read_index_table(&mut self, _index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
+    pub fn read_index_table(&mut self, index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::ReadIndexTable,
+                payload: Payload::ReadIndexTable(index_page),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -629,6 +757,17 @@ where
     ///     0x03: Fail to collect finger;
     /// Instuction code: 0x01
     pub fn gen_img(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::GenImg,
+                payload: Payload::GenImg,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -643,7 +782,18 @@ where
     ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
     ///     0x15: Fail to generate the image for the lackness of valid primary image;
     /// Instuction code: 0x02
-    pub fn img2_tz(&mut self, _buffer_id: BufferID) -> ConfirmationCode {
+    pub fn img2_tz(&mut self, buffer_id: BufferID) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::GenChar,
+                payload: Payload::GenChar(buffer_id),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -658,6 +808,17 @@ where
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     pub fn up_image(&mut self) -> (ConfirmationCode, ImageData) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::UpImage,
+                payload: Payload::UpImage,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -672,6 +833,17 @@ where
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     pub fn down_image(&mut self, _image: ImageData) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::DownImage,
+                payload: Payload::DownImage,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -685,7 +857,18 @@ where
     ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
     ///     0x15: Fail to generate the image for the lackness of valid primary image;
     /// Instruction code: 0x02
-    pub fn gen_char(&mut self) -> ConfirmationCode {
+    pub fn gen_char(&mut self, buffer_id: BufferID) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::GenChar,
+                payload: Payload::GenChar(buffer_id),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -698,6 +881,17 @@ where
     ///     0x0A: Fail to combine the character files. That's, the character files don't belong to one finger.
     /// Instuction code: 0x05
     pub fn reg_model(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::RegModel,
+                payload: Payload::RegModel,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -714,7 +908,18 @@ where
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     /// Note: The instruction doesn't affect buffer contents.
-    pub fn up_char(&mut self, _buffer_id: BufferID) -> ConfirmationCode {
+    pub fn up_char(&mut self, buffer_id: BufferID) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::UpChar,
+                payload: Payload::UpChar(buffer_id),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -729,11 +934,21 @@ where
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     /// Note: The instruction doesn't affect buffer contents.
-    pub fn down_char(
-        &mut self,
-        _buffer_id: BufferID,
-        _template: CharacterData,
-    ) -> ConfirmationCode {
+    pub fn down_char(&mut self, buffer_id: BufferID, template: CharacterData) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::UpChar,
+                payload: Payload::DownChar(buffer_id),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
+        // TODO: This one is going to be a doozy. Going to have to send muliple packets after the first one.
+        let _silence = template;
+
         todo!()
     }
 
@@ -747,10 +962,21 @@ where
     ///     0x18: Error when writing Flash.
     /// Instuction code: 0x06
     /// Note: CharBufferID is filled with 0x01
-    pub fn store(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode {
+    pub fn store(&mut self, buffer_id: BufferID, model_id: IndexPage) -> ConfirmationCode {
         // TODO: This one is a little funky. _model_id param expects a [u8; 2].
         // The first byte being the page number, (0-3)
         // The second byte being the index in that page. (0-255)
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::UpChar,
+                payload: Payload::Store(buffer_id, model_id),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -764,10 +990,21 @@ where
     ///     0x0B: Addressing ModelID is beyond the finger library;
     /// Instuction code: 07H
     /// Note: CharBufferID is filled with 0x01
-    pub fn load_char(&mut self, _buffer_id: BufferID, _model_id: IndexPage) -> ConfirmationCode {
+    pub fn load_char(&mut self, buffer_id: BufferID, model_id: IndexPage) -> ConfirmationCode {
         // TODO: This one is a little funky. _model_id param expects a [u8; 2].
         // The first byte being the page number, (0-3)
         // The second byte being the index in that page. (0-255)
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::LoadChar,
+                payload: Payload::LoadChar(buffer_id, model_id),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -780,7 +1017,18 @@ where
     ///     0x10: Failed to delete templates;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x0C
-    pub fn delete_char(&mut self, _start_id: BufferID, _num: u8) -> ConfirmationCode {
+    pub fn delete_char(&mut self, start_id: BufferID, num: u8) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::LoadChar,
+                payload: Payload::DeletChar(start_id, num),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -794,6 +1042,17 @@ where
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x0D
     pub fn empty(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::Empty,
+                payload: Payload::Empty,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -807,6 +1066,17 @@ where
     /// Instuction code: 0x03
     /// Note: The instruction doesn't affect the contents of the buffers.
     pub fn r#match(&mut self) -> (ConfirmationCode, MatchScore) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::Match,
+                payload: Payload::Match,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -821,10 +1091,21 @@ where
     /// Note: The instruction doesn't affect the contents of the buffers.
     pub fn search(
         &mut self,
-        _buffer_id: BufferID,
-        _start_page: u16,
-        _num: u16,
+        buffer_id: BufferID,
+        start_page: u16,
+        num: u16,
     ) -> (ConfirmationCode, u16, MatchScore) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::Search,
+                payload: Payload::Search(buffer_id, start_page, num),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -842,6 +1123,17 @@ where
     ///     0x07: Poor image quality;
     /// Instuction code: 0x28
     pub fn get_image_ex(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::GetImageEx,
+                payload: Payload::GetImageEx,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -853,6 +1145,17 @@ where
     ///     other: Cancel setting failed;
     /// Instuction code: 0x30
     pub fn cancel(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::Cancel,
+                payload: Payload::Cancel,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -865,6 +1168,17 @@ where
     /// Instuction code: 0x40
     ///     In addition, after the module is powered on, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
     pub fn handshake(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::HandShake,
+                payload: Payload::HandShake,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -876,6 +1190,17 @@ where
     ///     0x29: the sensor is abnormal;
     /// Instuction code: 0x36
     pub fn check_sensor(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::CheckSensor,
+                payload: Payload::CheckSensor,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -887,6 +1212,17 @@ where
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x39
     pub fn get_alg_ver(&mut self) -> (ConfirmationCode, AlgVer) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::GetAlgVer,
+                payload: Payload::GetAlgVer,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -898,6 +1234,17 @@ where
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x3A
     pub fn get_fw_ver(&mut self) -> (ConfirmationCode, FwVer) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::GetFwVer,
+                payload: Payload::GetFwVer,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -909,6 +1256,17 @@ where
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x3C
     pub fn read_prod_info(&mut self) -> (ConfirmationCode, ProdInfo) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::ReadProdInfo,
+                payload: Payload::ReadProdInfo,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -921,6 +1279,17 @@ where
     /// Instuction code: 0x3D
     ///     After module reset, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
     pub fn soft_rst(&mut self) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::SoftRst,
+                payload: Payload::SoftRst,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -935,14 +1304,20 @@ where
         &mut self,
         ctrl: LightPattern,
         speed: Speed,
-        color_index: Color,
+        color: Color,
         count: Times,
     ) -> ConfirmationCode {
-        let mut packet: [u8; 16] = [0x00; 16];
-        packet[10] = ctrl.into();
-        packet[11] = speed;
-        packet[12] = color_index.into();
-        packet[13] = count;
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::AuraLedConfig,
+                payload: Payload::AuraLedConfig(ctrl, speed, color, count),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -971,12 +1346,29 @@ where
     /// Note: Model ID: Location ID : 0-0xC7, 0xC8-0xFF is automatic filling (The ID number is assigned by the system; The system will be starting from template 0 to searches the empty templates.)
     pub fn auto_enroll(
         &mut self,
-        _model_id: IndexPage,
-        _allow_cover_id: bool,
-        _allow_duplicate: bool,
-        _return_in_critical: bool,
-        _ask_finger_to_leave: bool,
+        model_id: IndexPage,
+        allow_cover_id: bool,
+        allow_duplicate: bool,
+        return_in_critical: bool,
+        ask_finger_to_leave: bool,
     ) -> (ConfirmationCode, IndexPage) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::AutoEnroll,
+                payload: Payload::AutoEnroll(
+                    model_id,
+                    allow_cover_id,
+                    allow_duplicate,
+                    return_in_critical,
+                    ask_finger_to_leave,
+                ),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -1000,12 +1392,23 @@ where
     /// Instruction code: 0x32
     pub fn auto_identify(
         &mut self,
-        _safe_grade: SafeGrade,
-        _start: u8,
-        _num: u8,
-        _search_times: u8,
-        _return_in_critical: bool,
+        grade: SafeGrade,
+        start: u8,
+        num: u8,
+        times: u8,
+        return_in_critical: bool,
     ) -> (ConfirmationCode, IndexPage, MatchScore) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::AuraLedConfig,
+                payload: Payload::AutoIdentify(grade, start, num, times, return_in_critical),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -1019,17 +1422,18 @@ where
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x14
     pub fn get_random_code(&mut self) -> (ConfirmationCode, u32) {
-        let _packet: Package = Package {
+        let mut package = Package {
             identifier: Identifier::Command,
-            length: 4,
             contents: Data {
                 instruction: Instruction::GetRandomCode,
+                payload: Payload::GetRandomCode,
             },
-            checksum: Sum::default(),
             ..Default::default()
         };
+        package.length();
+        package.checksum();
 
-        (ConfirmationCode::Success, 4 /* Fair Dice Roll */)
+        todo!()
     }
 
     /// To read information page - ReadInfPage
@@ -1044,6 +1448,17 @@ where
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery;
     /// Note: The instruction doesn't affect buffer contents;
     pub fn read_inf_page(&mut self) -> (ConfirmationCode, Page) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::ReadInfPage,
+                payload: Payload::ReadInfPage,
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
@@ -1055,22 +1470,44 @@ where
     ///     0x01: Error when receiving package;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x18
-    pub fn write_notepad(&mut self, _note_page_number: u8, _content: Page) -> ConfirmationCode {
+    pub fn write_notepad(
+        &mut self,
+        note_page_number: NotePageNum,
+        content: Page,
+    ) -> ConfirmationCode {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::WriteNotepad,
+                payload: Payload::WriteNotepad(note_page_number, content),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 
     /// To read note pad - ReadNotepad
     /// Description: To read the specified page's data content; Also see WriteNotepad.
-    /// Input Parameter: none
+    /// Input Parameter: NotePageNum
     /// Return Parameter: Confirmation code (1 byte) + data content
     ///     0x00: Read success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x19
-    pub fn read_notepad(
-        &mut self,
-        _note_page_number: u8,
-        _content: Page,
-    ) -> (ConfirmationCode, Page) {
+    pub fn read_notepad(&mut self, note_page_number: NotePageNum) -> (ConfirmationCode, Page) {
+        let mut package = Package {
+            identifier: Identifier::Command,
+            contents: Data {
+                instruction: Instruction::WriteNotepad,
+                payload: Payload::ReadNotepad(note_page_number),
+            },
+            ..Default::default()
+        };
+        package.length();
+        package.checksum();
+
         todo!()
     }
 }
@@ -1271,7 +1708,7 @@ pub enum Instruction {
     /// Collect finger image
     GenImg = 0x01,
     /// To generate character file from image
-    Img2Tz = 0x02,
+    GenChar = 0x02,
     /// Carry out precise matching of two templates;
     Match = 0x03,
     /// Search the finger library
@@ -1334,6 +1771,8 @@ pub enum Instruction {
     GetAlgVer = 0x39,
     /// Get the firmware version
     GetFwVer = 0x3A,
+    /// Read product information
+    ReadProdInfo = 0x3C,
     /// Soft reset
     SoftRst = 0x3D,
     /// Hand Shake
