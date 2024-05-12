@@ -1,3 +1,5 @@
+use log::{debug, error, info, trace, warn};
+use pretty_hex::*;
 use r503::*;
 
 #[test]
@@ -17,6 +19,26 @@ fn checksum_templete_num() {
     checksum = checksum.wrapping_add(part4);
 
     assert_eq!(checksum, 0x0021);
+}
+
+#[test]
+fn checksum_templete_packet() {
+    let package = Package::build(
+        Identifier::Command,
+        Instruction::TempleteNum,
+        Payload::TempleteNum,
+    );
+
+    let hexcfg = HexConfig {
+        title: true,
+        width: 32,
+        group: 8,
+        ..HexConfig::default()
+    };
+
+    println!("Package: {:?}", &package.as_bytes().hex_conf(hexcfg));
+
+    assert_eq!(package.get_checksum(), 0x0021);
 }
 
 #[test]
