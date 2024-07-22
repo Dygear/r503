@@ -1,4 +1,3 @@
-use log::{debug, error, info, trace, warn};
 use pretty_hex::*;
 use r503::*;
 

@@ -271,6 +271,11 @@ pub enum Identifier {
     Acknowledge = 0x07,
     End = 0x08,
 }
+impl From<Identifier> for u8 {
+    fn from(this: Identifier) -> u8 {
+        this.into()
+    }
+}
 
 /// Name: Package length
 /// Symbol: LENGTH
@@ -1697,4 +1702,9 @@ pub enum Instruction {
     SoftRst = 0x3D,
     /// Hand Shake
     HandShake = 0x40,
+}
+impl From<Instruction> for u8 {
+    fn from(this: Instruction) -> u8 {
+        this.into()
+    }
 }
