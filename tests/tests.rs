@@ -2,9 +2,6 @@ use pretty_hex::*;
 use r503::*;
 
 #[test]
-fn aura_led_ring() {}
-
-#[test]
 fn checksum_templete_num() {
     // From the manual, TempleteNum
     let part1: u16 = 0x01; // Package identifier

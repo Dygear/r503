@@ -139,7 +139,7 @@ type ImageData = [u8; 192 * 192];
 // After the upper computer sets the system parameter instructions, the system must be powered on again so that the module can work according to the new configuration.
 
 #[repr(u8)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ParameterSetting {
     /// The Parameter controls the UART communication speed of the Module. Its value is an integer N, N= [1/2/4/6/12]. Corresponding baud rate is 9600*N bps.
     BaudRateControl = 4,
@@ -152,7 +152,7 @@ pub enum ParameterSetting {
 /// # Baud rate control (Parameter Number: 4)
 /// The Parameter controls the UART communication speed of the Modul. Its value is an integer N, N= [1/2/4/6/12]. Cooresponding baud rate is 9600*N bps.
 #[repr(u8)]
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum BaudRate {
     Rate9600 = 1,
     Rate19200 = 2,
@@ -165,7 +165,7 @@ pub enum BaudRate {
 /// # Security Level (Parameter Number: 5)
 /// The Parameter controls the matching threshold value of fingerprint searching and matching. Security level is divided into 5 grades, and cooresponding value is 1, 2, 3, 4, 5. At level 1, FAR is the highest and FRR is the lowest; however at level 5, FAR is the lowest and FRR is the highest.
 #[repr(u8)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SecurityLevel {
     Level1 = 1,
     Level2 = 2,
@@ -177,7 +177,7 @@ pub enum SecurityLevel {
 /// # Data package length (Parameter Number: 6)
 /// The parameter decides the max length of the transferring data package when communicating with upper computer. Its value is 0, 1, 2, 3, corresponding to 32 bytes, 64 bytes, 128 bytes, 256 bytes respectively.
 #[repr(u8)]
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum PacketLength {
     Bytes32 = 0,
     Bytes64 = 1,
@@ -196,7 +196,7 @@ pub enum PacketLength {
 // 0            Busy        1 = Sstem is executing commands; 0 = system is free;
 
 #[repr(u16)]
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum SystemRegister {
     Busy = 0b0000_0000_0000_0001,       // 0x01 (1)
     Pass = 0b0000_0000_0000_0010,       // 0x02 (2)
@@ -273,9 +273,14 @@ pub const ADDRESS: Address = 0xFFFFFFFF;
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Identifier {
+    /// 1 = Command Packet
     Command = 0x01,
+    /// 2 = Data Packet, data packet shall not appear alone in executing process,
+    /// must follow command packet or acknowledge packet.
     Data = 0x02,
+    /// 7 = Acknowledge packet
     Acknowledge = 0x07,
+    /// 8 = End of Data packet.
     End = 0x08,
 }
 impl From<Identifier> for u8 {
@@ -430,6 +435,132 @@ impl Payload {
                 | Self::ReadInfPage
         )
     }
+
+    fn as_bytes(&self) -> Vec<u8, 520> {
+        let mut buffer = Vec::new();
+
+        match self {
+            Payload::None => buffer,
+            Payload::VfyPwd(password) => {
+                let bytes = password.to_be_bytes();
+                let _ = buffer.extend_from_slice(&bytes);
+                buffer
+            },
+            Payload::SetPwd(password) => {
+                let bytes = password.to_be_bytes();
+                let _ = buffer.extend_from_slice(&bytes);
+                buffer
+            },
+            Payload::SetAdder(address) => {
+                let bytes = address.to_be_bytes();
+                let _ = buffer.extend_from_slice(&bytes);
+                buffer
+            },
+            Payload::SetSysPara(parameter_setting, value) => {
+                let _ = buffer.push(*parameter_setting as u8);
+                let _ = buffer.push(*value as u8);
+                buffer
+            },
+            Payload::ReadSysPara => buffer,
+            Payload::TempleteNum => buffer,
+            Payload::ReadIndexTable(index_page) => {
+                let _ = buffer.push(*index_page as u8);
+                buffer
+            },
+            Payload::GenImg => buffer,
+            Payload::Img2Tz(buffer_id) => {
+                let _ = buffer.push(*buffer_id as u8);
+                buffer
+            },
+            Payload::UpImage => buffer,
+            Payload::DownImage => buffer,
+            Payload::GenChar(buffer_id) => {
+                let _ = buffer.push(*buffer_id as u8);
+                buffer
+            },
+            Payload::RegModel => buffer,
+            Payload::UpChar(buffer_id) => {
+                let _ = buffer.push(*buffer_id as u8);
+                buffer
+            },
+            Payload::DownChar(buffer_id) => {
+                let _ = buffer.push(*buffer_id as u8);
+                buffer
+            },
+            Payload::Store(buffer_id, index_page) => {
+                let _ = buffer.push(*buffer_id as u8);
+                let _ = buffer.push(*index_page as u8);
+                buffer
+            },
+            Payload::LoadChar(buffer_id, index_page) => {
+                let _ = buffer.push(*buffer_id as u8);
+                let _ = buffer.push(*index_page as u8);
+                buffer
+            },
+            Payload::DeleteChar(buffer_id, num) => {
+                let _ = buffer.push(*buffer_id as u8);
+                let _ = buffer.push(*num);
+                buffer
+            },
+            Payload::Empty => buffer,
+            Payload::Match => buffer,
+            Payload::Search(buffer_id, start_id, num) => {
+                let _ = buffer.push(*buffer_id as u8);
+
+                let bytes = start_id.to_be_bytes();
+                let _ = buffer.extend_from_slice(&bytes);
+
+                let bytes = num.to_be_bytes();
+                let _ = buffer.extend_from_slice(&bytes);
+
+                buffer
+            },
+            Payload::GetImageEx => buffer,
+            Payload::Cancel => buffer,
+            Payload::HandShake => buffer,
+            Payload::CheckSensor => buffer,
+            Payload::GetAlgVer => buffer,
+            Payload::GetFwVer => buffer,
+            Payload::ReadProdInfo => buffer,
+            Payload::SoftRst => buffer,
+            Payload::AuraLedConfig(light_pattern, speed, color, times) => {
+                let _ = buffer.push(*light_pattern as u8);
+                let _ = buffer.push(*speed as u8);
+                let _ = buffer.push(*color as u8);
+                let _ = buffer.push(*times as u8);
+                buffer
+            },
+            Payload::AutoEnroll(index_page, allow_cover_id,allow_duplicate, return_in_critical, ask_finger_to_leave) => {
+                let _ = buffer.push(*index_page as u8);
+                let _ = buffer.push(*allow_cover_id as u8);
+                let _ = buffer.push(*allow_duplicate as u8);
+                let _ = buffer.push(*return_in_critical as u8);
+                let _ = buffer.push(*ask_finger_to_leave as u8);
+                buffer
+            },
+            Payload::AutoIdentify(safe_grade, start, num, times, return_in_critical) => {
+                let _ = buffer.push(*safe_grade as u8);
+                let _ = buffer.push(*start);
+                let _ = buffer.push(*num);
+                let _ = buffer.push(*times);
+                let _ = buffer.push(*return_in_critical as u8);
+                buffer
+            },
+            Payload::GetRandomCode => buffer,
+            Payload::ReadInfPage => buffer,
+            Payload::WriteNotepad(note_page_num, page) => {
+                let _ = buffer.push(*note_page_num as u8);
+                for byte in &page[..] {
+                    let _ = buffer.push(*byte);
+                }
+                buffer
+            },
+            Payload::ReadNotepad(note_page_num) => {
+                let _ = buffer.push(*note_page_num as u8);
+                buffer
+            },
+        }
+    }
 }
 
 // Name: Checksum
@@ -477,16 +608,15 @@ impl Package {
         self
     }
 
-    /// Gets the length of the package in bytes.
-    pub fn length(&mut self) -> Length {
+    /// Sets the length of the package in bytes, and returns the same.
+    pub fn len(&mut self) -> Length {
         let mut length: Length = 0;
         length += size_of::<Header>() as u16;
         length += size_of::<Address>() as u16;
         length += size_of::<Identifier>() as u16;
         length += size_of::<Length>() as u16;
-        // TODO: We actually want to call self.contents.len() to get the length that way.
-        // Right now, this is going to give the max size of a variant of Data.
-        length += self.contents.len() as u16;
+        length += 1_u16;
+        length += self.contents.payload.as_bytes().len() as u16;
         length += size_of::<Sum>() as u16;
 
         // Yep. It's a u16, but has to be less than or equal to 256 bytes.
@@ -506,7 +636,7 @@ impl Package {
     }
 
     /// Calculates the checksum of all of the bytes in the Package.
-    /// Does so by looking at each byte and adding it's value to our Sum type.
+    /// Sets the checksum, and returns the same.
     pub fn checksum(&mut self) -> Sum {
         let mut checksum: Sum = 0;
 
@@ -516,7 +646,10 @@ impl Package {
         checksum += get_u16_as_u16_parts(self.length)[0];
         checksum += get_u16_as_u16_parts(self.length)[1];
         // TODO: Contents
-
+        checksum += self.contents.instruction as u16;
+        for byte in self.contents.payload.as_bytes() {
+            checksum += byte as u16;
+        }
         self.checksum = checksum;
         checksum
     }
@@ -532,9 +665,10 @@ impl Package {
                 instruction,
                 payload,
             },
-            ..Default::default()
+            ..Package::default()
         };
-        package.length();
+        package.set_address(ADDRESS);
+        package.len();
         package.checksum();
 
         package
@@ -1488,6 +1622,7 @@ pub struct BasicParameters {
 /// Index page 1 means to read 256 ~ 511 fingerprint template index table
 /// Index page 2 means to read 512 ~ 767 fingerprint template index table
 /// Index page 3 means to read 768 ~ 1023 fingerprint template index table
+#[derive(Clone, Copy)]
 pub enum IndexPage {
     Page0 = 0,
     Page1 = 1,
@@ -1501,7 +1636,7 @@ pub enum IndexPage {
 pub type IndexTable = [u8; 32];
 
 #[repr(u8)]
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub enum BufferID {
     CharBuffer1 = 0x01,
     CharBuffer2 = 0x02,
@@ -1550,7 +1685,7 @@ pub struct ProdInfo {
 }
 
 #[repr(u8)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LightPattern {
     Breathing = 0x01,
     Flashing = 0x02,
@@ -1571,7 +1706,7 @@ impl From<LightPattern> for u8 {
 pub type Speed = u8;
 
 #[repr(u8)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Color {
     Red = 0b0000_0001,    // 0x01,
     Blue = 0b0000_0010,   // 0x02,
@@ -1629,6 +1764,7 @@ enum Paramater1 {
     StoreTemplates = 0x0F,
 }
 
+#[derive(Clone, Copy)]
 pub enum SafeGrade {
     Low = 1,
     LowMid = 2,
@@ -1639,7 +1775,9 @@ pub enum SafeGrade {
 pub type Page = [u8; 512];
 
 /// # Instructions Table
+
 #[repr(u8)]
+#[derive(Clone, Copy)]
 pub enum Instruction {
     /// 1 = Collect finger image
     GenImg = 0x01,
@@ -1738,7 +1876,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let vfy_pwd = Payload::VfyPwd(0xFFFFFFFF_u32);
+        let vfy_pwd = Payload::VfyPwd(0xFFFFFFFF);
         assert_eq!(vfy_pwd.len(), 4)
     }
 }
