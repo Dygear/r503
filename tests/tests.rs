@@ -19,7 +19,7 @@ fn checksum_templete_num() {
 
 #[test]
 fn checksum_templete_packet() {
-    let package = Package::build(
+    let mut package = Package::build(
         Identifier::Command,
         Instruction::TempleteNum,
         Payload::TempleteNum,

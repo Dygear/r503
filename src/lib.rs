@@ -611,11 +611,7 @@ impl Package {
     /// Sets the length of the package in bytes, and returns the same.
     pub fn len(&mut self) -> Length {
         let mut length: Length = 0;
-        length += size_of::<Header>() as u16;
-        length += size_of::<Address>() as u16;
-        length += size_of::<Identifier>() as u16;
-        length += size_of::<Length>() as u16;
-        length += 1_u16;
+        length += size_of::<Instruction>() as u16;
         length += self.contents.payload.as_bytes().len() as u16;
         length += size_of::<Sum>() as u16;
 
@@ -667,7 +663,6 @@ impl Package {
             },
             ..Package::default()
         };
-        package.set_address(ADDRESS);
         package.len();
         package.checksum();
 
@@ -675,13 +670,40 @@ impl Package {
     }
 
     /// Get the bytes of the struct cleanly.
-    pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::slice::from_raw_parts(
-                self as *const Self as *const u8,
-                core::mem::size_of::<Package>(),
-            )
+    pub fn as_bytes(&mut self) -> Vec<u8, 528> {
+        let mut bytes = Vec::new();
+
+        // Header
+        let data = self.header.to_be_bytes();
+        for byte in data {
+            let _ = bytes.push(byte);
         }
+        // Address
+        let data = self.address.to_be_bytes();
+        for byte in data {
+            let _ = bytes.push(byte);
+        }
+        // Identifier
+        let _ = bytes.push(self.identifier as u8);
+        // Length
+        let data = self.len().to_be_bytes();
+        for byte in data {
+            let _ = bytes.push(byte);
+        }
+        // Contents - Instruction
+        let _ = bytes.push(self.contents.instruction as u8);
+        // Contents - Payload
+        let data = self.contents.payload.as_bytes();
+        for byte in data {
+            let _ = bytes.push(byte);
+        }
+        // Checksum
+        let data = self.checksum().to_be_bytes();
+        for byte in data {
+            let _ = bytes.push(byte);
+        }
+
+        bytes
     }
 }
 
