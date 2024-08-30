@@ -1,6 +1,7 @@
 #![no_std]
 use core::mem::size_of;
 use embedded_io_async::{Read, Write};
+use heapless::Vec;
 
 pub struct Driver<UART> {
     pub uart: UART,
@@ -138,6 +139,7 @@ type ImageData = [u8; 192 * 192];
 // After the upper computer sets the system parameter instructions, the system must be powered on again so that the module can work according to the new configuration.
 
 #[repr(u8)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ParameterSetting {
     /// The Parameter controls the UART communication speed of the Module. Its value is an integer N, N= [1/2/4/6/12]. Corresponding baud rate is 9600*N bps.
     BaudRateControl = 4,
@@ -150,10 +152,12 @@ pub enum ParameterSetting {
 /// # Baud rate control (Parameter Number: 4)
 /// The Parameter controls the UART communication speed of the Modul. Its value is an integer N, N= [1/2/4/6/12]. Cooresponding baud rate is 9600*N bps.
 #[repr(u8)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub enum BaudRate {
     Rate9600 = 1,
     Rate19200 = 2,
     Rate38400 = 4,
+    #[default]
     Rate57600 = 6,
     Rate115200 = 12,
 }
@@ -161,6 +165,7 @@ pub enum BaudRate {
 /// # Security Level (Parameter Number: 5)
 /// The Parameter controls the matching threshold value of fingerprint searching and matching. Security level is divided into 5 grades, and cooresponding value is 1, 2, 3, 4, 5. At level 1, FAR is the highest and FRR is the lowest; however at level 5, FAR is the lowest and FRR is the highest.
 #[repr(u8)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum SecurityLevel {
     Level1 = 1,
     Level2 = 2,
@@ -172,10 +177,12 @@ pub enum SecurityLevel {
 /// # Data package length (Parameter Number: 6)
 /// The parameter decides the max length of the transferring data package when communicating with upper computer. Its value is 0, 1, 2, 3, corresponding to 32 bytes, 64 bytes, 128 bytes, 256 bytes respectively.
 #[repr(u8)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub enum PacketLength {
     Bytes32 = 0,
     Bytes64 = 1,
     Bytes128 = 2,
+    #[default]
     Bytes256 = 3,
 }
 
@@ -189,7 +196,7 @@ pub enum PacketLength {
 // 0            Busy        1 = Sstem is executing commands; 0 = system is free;
 
 #[repr(u16)]
-#[derive(Default)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub enum SystemRegister {
     Busy = 0b0000_0000_0000_0001,       // 0x01 (1)
     Pass = 0b0000_0000_0000_0010,       // 0x02 (2)
@@ -246,14 +253,14 @@ const PASSWORD: Password = 0x00000000;
 /// Length: 2 Bytes
 /// Description: Fixed value of 0xEF01; High byte transferred first.
 pub type Header = u16;
-const HEADER: Header = 0xEF01;
+pub const HEADER: Header = 0xEF01;
 
 /// Name: Adder
 /// Symbol: ADDER
 /// Length: 4 bytes
 /// Description: Default value is 0xFFFFFFFF, which can be modified by command. High byte transferred first and at wrong adder value, module will reject to transfer.
 pub type Address = u32;
-const ADDRESS: Address = 0xFFFFFFFF;
+pub const ADDRESS: Address = 0xFFFFFFFF;
 
 // Name: Package identifier
 // Symbol: PID
@@ -264,7 +271,7 @@ const ADDRESS: Address = 0xFFFFFFFF;
 //      0x07: Acknowledge packet;
 //      0x08: End of Data packet.
 #[repr(u8)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Identifier {
     Command = 0x01,
     Data = 0x02,
@@ -272,8 +279,8 @@ pub enum Identifier {
     End = 0x08,
 }
 impl From<Identifier> for u8 {
-    fn from(this: Identifier) -> u8 {
-        this.into()
+    fn from(item: Identifier) -> Self {
+        item as u8
     }
 }
 
@@ -395,7 +402,7 @@ impl Payload {
             Self::GetRandomCode => size_of::<()>(),
             Self::ReadInfPage => size_of::<()>(),
             Self::WriteNotepad(_, _) => size_of::<(NotePageNum, Page)>(),
-            Self::ReadNotepad(_) => size_of::<(NotePageNum)>(),
+            Self::ReadNotepad(_) => size_of::<NotePageNum>(),
         }
     }
 
@@ -502,11 +509,12 @@ impl Package {
     /// Does so by looking at each byte and adding it's value to our Sum type.
     pub fn checksum(&mut self) -> Sum {
         let mut checksum: Sum = 0;
+
         // Identifier
-        checksum = checksum.wrapping_add(self.identifier as u16);
+        checksum += self.identifier as u16;
         // Length
-        checksum = checksum.wrapping_add(get_u16_as_u16_parts(self.length)[0]);
-        checksum = checksum.wrapping_add(get_u16_as_u16_parts(self.length)[1]);
+        checksum += get_u16_as_u16_parts(self.length)[0];
+        checksum += get_u16_as_u16_parts(self.length)[1];
         // TODO: Contents
 
         self.checksum = checksum;
@@ -566,77 +574,77 @@ type NotePageNum = u8;
 #[repr(u8)]
 #[derive(Debug, Default, PartialEq)]
 pub enum ConfirmationCode {
-    /// Commad Execution Complete;
+    /// 0 = Commad Execution Complete;
     Success = 0x00,
-    /// Error When Receiving Data Package;
+    /// 1 = Error When Receiving Data Package;
     ErrorReceivingPacket = 0x01,
-    /// No Finger on the Sensor;
+    /// 2 = No Finger on the Sensor;
     NoFingerOnSensor = 0x02,
-    /// Fail to Enroll the Finger;
+    /// 3 = Fail to Enroll the Finger;
     FailToEnrollFinger = 0x03,
-    /// Fail to Generate Character File Due to the Over-disorderly Fingerprint Image;
+    /// 6 = Fail to Generate Character File Due to the Over-disorderly Fingerprint Image;
     FailToGenerateCharacterOverDisorderlyFingerprintImage = 0x06,
-    /// Fail to Generate Character File due to Lackness of Character Point or Over-smallness of Fingerprint Image;
+    /// 7 = Fail to Generate Character File due to Lackness of Character Point or Over-smallness of Fingerprint Image;
     FailToGenerateCharacterLacknessOfCharacterPointOrOverSmallness = 0x07,
-    /// Finger Doesn't Match;
+    /// 8 = Finger Doesn't Match;
     FailFingerDoesntMatch = 0x08,
-    /// Fail to Find the Matching Finger;
+    /// 9 = Fail to Find the Matching Finger;
     FailToFindMatchingFinger = 0x09,
-    /// Fail to Combine the Character Files;
+    /// 10 = Fail to Combine the Character Files;
     FailToCombineCharacterFiles = 0x0A,
-    /// Addressing PageID is Beyond the Finger Library;
+    /// 11 = Addressing PageID is Beyond the Finger Library;
     AddressingPageIDIsBeyoundTheFingerLibary = 0x0B,
-    /// Error When Reading Template from Library or the Template is Invalid;
+    /// 12 = Error When Reading Template from Library or the Template is Invalid;
     ErrorWhenReadingTemplateFromLibararORTemplateIsInvalid = 0x0C,
-    /// Error When Uploading Template;
+    /// 13 = Error When Uploading Template;
     ErrorWhenUploadingTemplate = 0x0D,
-    /// Module can't receive the following data packages;
+    /// 14 = Module can't receive the following data packages;
     ModuleCantReceivingTheFollowingDataPackages = 0x0E,
-    /// Error when uploading image;
+    /// 15 = Error when uploading image;
     ErrorWhenUploadingImage = 0x0F,
-    /// Fail to delete the template;
+    /// 16 = Fail to delete the template;
     FailToDeleteTheTemplate = 0x10,
-    /// Fail to clear finger library;
+    /// 17 = Fail to clear finger library;
     FailToClearFingerLibary = 0x11,
-    /// Wrong password;
+    /// 19 = Wrong password;
     WrongPassword = 0x13,
-    /// Fail to generate the image for the lackness of valid primary image;
+    /// 21 = Fail to generate the image for the lackness of valid primary image;
     FailToGenerateImageLacknessOfValidPrimaryImage = 0x15,
-    /// Error when writing flash;
+    /// 24 = Error when writing flash;
     ErrorWhenWritingFlash = 0x18,
-    /// No definition error;
+    /// 25 = No definition error;
     NoDefinitionError = 0x19,
-    /// Invalid register number;
+    /// 26 = Invalid register number;
     InvalidRegisterNumber = 0x1A,
-    /// Incorrect configuration of register;
+    /// 27 = Incorrect configuration of register;
     IncorrectConfigurationOfRegister = 0x1B,
-    /// Wrong notepad page number;
+    /// 28 = Wrong notepad page number;
     WrongNotepadPageNumber = 0x1C,
-    /// Fail to operate the communication port;
+    /// 29 = Fail to operate the communication port;
     FailToOperateTheCommunicationPort = 0x1D,
-    /// The fingerprint libary is full;
+    /// 31 = The fingerprint libary is full;
     FingerPrintLibaryFull = 0x1F,
-    /// The address code is incorrect;
+    /// 32 = The address code is incorrect;
     AddressIncorrect = 0x20,
-    /// The password must be verified;
+    /// 33 = The password must be verified;
     MustVerifyPassword = 0x21,
-    /// The fingerprint template is empty;
+    /// 34 = The fingerprint template is empty;
     FingerTemplateEmpty = 0x22,
-    /// The fingerprint library is empty;
+    /// 36 = The fingerprint library is empty;
     FingerLibaryEmpty = 0x24,
-    /// Timeout;
+    /// 38 = Timeout;
     Timeout = 0x26,
-    /// The fingerprints already exist;
+    /// 39 = The fingerprints already exist;
     FingerAlreadyExists = 0x27,
-    /// Sensor hardware error;
+    /// 41 Sensor hardware error;
     SensorHardwareError = 0x29,
-    /// Unsupported command;
+    /// 252 = Unsupported command;
     UnsupportedCommand = 0xFC,
-    /// Hardware Error;
+    /// 253 = Hardware Error;
     HardwareError = 0xFD,
-    /// Command execution failure;
+    /// 254 = Command execution failure;
     CommandExecutionFailure = 0xFE,
-    /// Others: System Reserved; (And Default for this Rust Lib);
+    /// 255 Others: System Reserved; (And Default for this Rust Lib);
     #[default]
     SystemReserved = 0xFF,
 }
@@ -662,20 +670,20 @@ impl ConfirmationCode {
             0x11 /*  17 */ => Self::FailToClearFingerLibary,
             0x13 /*  19 */ => Self::WrongPassword,
             0x15 /*  21 */ => Self::FailToGenerateImageLacknessOfValidPrimaryImage,
-            0x18 /*  23 */ => Self::ErrorWhenWritingFlash,
-            0x19 /*  24 */ => Self::NoDefinitionError,
-            0x1A /*  25 */ => Self::InvalidRegisterNumber,
-            0x1B /*  26 */ => Self::IncorrectConfigurationOfRegister,
-            0x1C /*  27 */ => Self::WrongNotepadPageNumber,
-            0x1D /*  28 */ => Self::FailToOperateTheCommunicationPort,
-            0x1F /*  30 */ => Self::FingerPrintLibaryFull,
-            0x20 /*  31 */ => Self::AddressIncorrect,
-            0x21 /*  32 */ => Self::MustVerifyPassword,
-            0x22 /*  33 */ => Self::FingerTemplateEmpty,
-            0x24 /*  35 */ => Self::FingerLibaryEmpty,
-            0x26 /*  37 */ => Self::Timeout,
-            0x27 /*  38 */ => Self::FingerAlreadyExists,
-            0x29 /*  40 */ => Self::SensorHardwareError,
+            0x18 /*  24 */ => Self::ErrorWhenWritingFlash,
+            0x19 /*  25 */ => Self::NoDefinitionError,
+            0x1A /*  26 */ => Self::InvalidRegisterNumber,
+            0x1B /*  27 */ => Self::IncorrectConfigurationOfRegister,
+            0x1C /*  28 */ => Self::WrongNotepadPageNumber,
+            0x1D /*  29 */ => Self::FailToOperateTheCommunicationPort,
+            0x1F /*  31 */ => Self::FingerPrintLibaryFull,
+            0x20 /*  32 */ => Self::AddressIncorrect,
+            0x21 /*  33 */ => Self::MustVerifyPassword,
+            0x22 /*  34 */ => Self::FingerTemplateEmpty,
+            0x24 /*  36 */ => Self::FingerLibaryEmpty,
+            0x26 /*  38 */ => Self::Timeout,
+            0x27 /*  39 */ => Self::FingerAlreadyExists,
+            0x29 /*  41 */ => Self::SensorHardwareError,
             0xFC /* 252 */ => Self::UnsupportedCommand,
             0xFD /* 253 */ => Self::HardwareError,
             0xFE /* 254 */ => Self::CommandExecutionFailure,
@@ -712,7 +720,7 @@ where
     ///     0x01: Error when receiving package;
     ///     0x13: Wrong password;
     /// Instruction code: 0x13
-    pub fn vfy_pwd(&mut self, password: Option<Password>) -> ConfirmationCode {
+    pub fn vfy_pwd(&mut self, password: Option<Password>) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::VfyPwd,
@@ -722,7 +730,7 @@ where
             }),
         );
 
-        todo!()
+        package
     }
 
     /// Set password - SetPwd
@@ -734,7 +742,7 @@ where
     ///     0x18: Error when writing FLASH;
     ///     0x21: Have to verify password;
     /// Instruction code: 0x12
-    pub fn set_pwd(&mut self, password: Option<Password>) -> ConfirmationCode {
+    pub fn set_pwd(&mut self, password: Option<Password>) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::SetPwd,
@@ -744,7 +752,7 @@ where
             }),
         );
 
-        todo!()
+        package
     }
 
     /// Set Module address - SetAdder
@@ -755,14 +763,14 @@ where
     ///     0x01: Error when receiving package;
     ///     0x18: Error when writing FLASH;
     /// Instruction code: 0x15
-    pub fn set_adder(&mut self, address: Address) -> ConfirmationCode {
+    pub fn set_adder(&mut self, address: Address) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::SetAdder,
             Payload::SetAdder(address),
         );
 
-        todo!()
+        package
     }
 
     /// Set module system's basic parameter - SetSysPara
@@ -774,14 +782,14 @@ where
     ///     0x18: Error when writing FLASH;
     ///     0x1A: Wrong register number;
     /// Instruction code: 0x0E
-    pub fn set_sys_para(&mut self, parameter: ParameterSetting, content: u8) -> ConfirmationCode {
+    pub fn set_sys_para(&mut self, parameter: ParameterSetting, content: u8) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::SetSysPara,
             Payload::SetSysPara(parameter, content),
         );
 
-        todo!()
+        package
     }
 
     /// Read system Parameter - ReadSysPara
@@ -792,14 +800,14 @@ where
     ///     0x01: Error when receiving package;
     ///     0x18: Error when writing FLASH;
     /// Instuction code: 0x0F
-    pub fn read_sys_para(&mut self) -> (ConfirmationCode, BasicParameters) {
+    pub fn read_sys_para(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::ReadSysPara,
             Payload::ReadSysPara,
         );
 
-        todo!()
+        package
     }
 
     /// Read valid template number - TempleteNum
@@ -809,14 +817,14 @@ where
     ///     0x00: Read success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x1D
-    pub fn templete_num(&mut self) -> (ConfirmationCode, u8) {
+    pub fn templete_num(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::TempleteNum,
             Payload::TempleteNum,
         );
 
-        todo!()
+        package
     }
 
     /// Read fingerprint template index table - ReadIndexTable(0x1F)
@@ -826,14 +834,14 @@ where
     ///     0x00: Read complete;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x1F
-    pub fn read_index_table(&mut self, index_page: IndexPage) -> (ConfirmationCode, IndexTable) {
+    pub fn read_index_table(&mut self, index_page: IndexPage) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::ReadIndexTable,
             Payload::ReadIndexTable(index_page),
         );
 
-        todo!()
+        package
     }
 
     // # Fingerprint-processing instructions
@@ -850,10 +858,10 @@ where
     ///     0x02: Can't detect finger;
     ///     0x03: Fail to collect finger;
     /// Instuction code: 0x01
-    pub fn gen_img(&mut self) -> ConfirmationCode {
+    pub fn gen_img(&mut self) -> Package {
         let package = Package::build(Identifier::Command, Instruction::GenImg, Payload::GenImg);
 
-        todo!()
+        package
     }
 
     /// I don't know if this function still exists.
@@ -867,14 +875,14 @@ where
     ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
     ///     0x15: Fail to generate the image for the lackness of valid primary image;
     /// Instuction code: 0x02
-    pub fn img2_tz(&mut self, buffer_id: BufferID) -> ConfirmationCode {
+    pub fn img2_tz(&mut self, buffer_id: BufferID) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::GenChar,
             Payload::GenChar(buffer_id),
         );
 
-        todo!()
+        package
     }
 
     /// Upload image - UpImage
@@ -887,10 +895,10 @@ where
     /// Instuction code: 0x0A
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-    pub fn up_image(&mut self) -> (ConfirmationCode, ImageData) {
+    pub fn up_image(&mut self) -> Package {
         let package = Package::build(Identifier::Command, Instruction::UpImage, Payload::UpImage);
 
-        todo!()
+        package
     }
 
     /// Download the image - DownImage
@@ -903,14 +911,14 @@ where
     /// Instuction code: 0x0B
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
-    pub fn down_image(&mut self, _image: ImageData) -> ConfirmationCode {
+    pub fn down_image(&mut self, _image: ImageData) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::DownImage,
             Payload::DownImage,
         );
 
-        todo!()
+        package
     }
 
     /// To generate character file from image - GenChar
@@ -923,14 +931,14 @@ where
     ///     0x07: Fail to generate character file due to lackness of character point or over-smallness of fingerprint image;
     ///     0x15: Fail to generate the image for the lackness of valid primary image;
     /// Instruction code: 0x02
-    pub fn gen_char(&mut self, buffer_id: BufferID) -> ConfirmationCode {
+    pub fn gen_char(&mut self, buffer_id: BufferID) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::GenChar,
             Payload::GenChar(buffer_id),
         );
 
-        todo!()
+        package
     }
 
     /// To generate template - RegModel
@@ -941,14 +949,14 @@ where
     ///     0x01: Error when receiving package;
     ///     0x0A: Fail to combine the character files. That's, the character files don't belong to one finger.
     /// Instuction code: 0x05
-    pub fn reg_model(&mut self) -> ConfirmationCode {
+    pub fn reg_model(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::RegModel,
             Payload::RegModel,
         );
 
-        todo!()
+        package
     }
 
     /// To upload character or template - UpChar
@@ -964,14 +972,14 @@ where
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     /// Note: The instruction doesn't affect buffer contents.
-    pub fn up_char(&mut self, buffer_id: BufferID) -> ConfirmationCode {
+    pub fn up_char(&mut self, buffer_id: BufferID) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::UpChar,
             Payload::UpChar(buffer_id),
         );
 
-        todo!()
+        package
     }
 
     /// Download template - DownChar
@@ -985,7 +993,7 @@ where
     /// Note: The upper computer sends the command packet, the module sends the acknowledge packet first, and then sends several data packet.
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery.
     /// Note: The instruction doesn't affect buffer contents.
-    pub fn down_char(&mut self, buffer_id: BufferID, template: CharacterData) -> ConfirmationCode {
+    pub fn down_char(&mut self, buffer_id: BufferID, template: CharacterData) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::DownChar,
@@ -995,7 +1003,7 @@ where
         // TODO: This one is going to be a doozy. Going to have to send muliple packets after the first one.
         let _silence = template;
 
-        todo!()
+        package
     }
 
     /// To store template - Store
@@ -1008,7 +1016,7 @@ where
     ///     0x18: Error when writing Flash.
     /// Instuction code: 0x06
     /// Note: CharBufferID is filled with 0x01
-    pub fn store(&mut self, buffer_id: BufferID, model_id: IndexPage) -> ConfirmationCode {
+    pub fn store(&mut self, buffer_id: BufferID, model_id: IndexPage) -> Package {
         // TODO: This one is a little funky. _model_id param expects a [u8; 2].
         // The first byte being the page number, (0-3)
         // The second byte being the index in that page. (0-255)
@@ -1018,7 +1026,7 @@ where
             Payload::Store(buffer_id, model_id),
         );
 
-        todo!()
+        package
     }
 
     /// To read template from Flash library - LoadChar
@@ -1031,7 +1039,7 @@ where
     ///     0x0B: Addressing ModelID is beyond the finger library;
     /// Instuction code: 07H
     /// Note: CharBufferID is filled with 0x01
-    pub fn load_char(&mut self, buffer_id: BufferID, model_id: IndexPage) -> ConfirmationCode {
+    pub fn load_char(&mut self, buffer_id: BufferID, model_id: IndexPage) -> Package {
         // TODO: This one is a little funky. _model_id param expects a [u8; 2].
         // The first byte being the page number, (0-3)
         // The second byte being the index in that page. (0-255)
@@ -1041,7 +1049,7 @@ where
             Payload::LoadChar(buffer_id, model_id),
         );
 
-        todo!()
+        package
     }
 
     /// To delete template - DeleteChar
@@ -1053,14 +1061,14 @@ where
     ///     0x10: Failed to delete templates;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x0C
-    pub fn delete_char(&mut self, start_id: BufferID, num: u8) -> ConfirmationCode {
+    pub fn delete_char(&mut self, start_id: BufferID, num: u8) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::DeleteChar,
             Payload::DeleteChar(start_id, num),
         );
 
-        todo!()
+        package
     }
 
     /// To empty finger library - Empty
@@ -1072,10 +1080,10 @@ where
     ///     0x11: Fail to clear finger library;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x0D
-    pub fn empty(&mut self) -> ConfirmationCode {
+    pub fn empty(&mut self) -> Package {
         let package = Package::build(Identifier::Command, Instruction::Empty, Payload::Empty);
 
-        todo!()
+        package
     }
 
     /// To carry out precise matching of two finger templates - Match
@@ -1087,10 +1095,10 @@ where
     ///     0x08: templates of the two buffers aren't matching;
     /// Instuction code: 0x03
     /// Note: The instruction doesn't affect the contents of the buffers.
-    pub fn r#match(&mut self) -> (ConfirmationCode, MatchScore) {
+    pub fn r#match(&mut self) -> Package {
         let package = Package::build(Identifier::Command, Instruction::Match, Payload::Match);
 
-        todo!()
+        package
     }
 
     /// To search finger library - Search
@@ -1107,14 +1115,14 @@ where
         buffer_id: BufferID,
         start_page: u16,
         num: u16,
-    ) -> (ConfirmationCode, u16, MatchScore) {
+    ) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::Search,
             Payload::Search(buffer_id, start_page, num),
         );
 
-        todo!()
+        package
     }
 
     /// Fingerprint image collection extension command - GetImageEx(0x28)
@@ -1130,14 +1138,14 @@ where
     ///     0x03: Unsuccessful entry
     ///     0x07: Poor image quality;
     /// Instuction code: 0x28
-    pub fn get_image_ex(&mut self) -> ConfirmationCode {
+    pub fn get_image_ex(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::GetImageEx,
             Payload::GetImageEx,
         );
 
-        todo!()
+        package
     }
 
     /// Cancel instruction - Cancel(0x30)
@@ -1147,10 +1155,10 @@ where
     ///     0x00: Cancel setting successful;
     ///     other: Cancel setting failed;
     /// Instuction code: 0x30
-    pub fn cancel(&mut self) -> ConfirmationCode {
+    pub fn cancel(&mut self) -> Package {
         let package = Package::build(Identifier::Command, Instruction::Cancel, Payload::Cancel);
 
-        todo!()
+        package
     }
 
     /// HandShake - HandShake(0x40)
@@ -1161,14 +1169,14 @@ where
     ///     other: The device is abnormal.
     /// Instuction code: 0x40
     ///     In addition, after the module is powered on, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
-    pub fn handshake(&mut self) -> ConfirmationCode {
+    pub fn handshake(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::HandShake,
             Payload::HandShake,
         );
 
-        todo!()
+        package
     }
 
     /// CheckSensor - CheckSensor (0x36)
@@ -1178,14 +1186,14 @@ where
     ///     0x00: The sensor is normal;
     ///     0x29: the sensor is abnormal;
     /// Instuction code: 0x36
-    pub fn check_sensor(&mut self) -> ConfirmationCode {
+    pub fn check_sensor(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::CheckSensor,
             Payload::CheckSensor,
         );
 
-        todo!()
+        package
     }
 
     /// Get the algorithm library version - GetAlgVer (0x39)
@@ -1195,14 +1203,14 @@ where
     ///     0x00: Success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x39
-    pub fn get_alg_ver(&mut self) -> (ConfirmationCode, AlgVer) {
+    pub fn get_alg_ver(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::GetAlgVer,
             Payload::GetAlgVer,
         );
 
-        todo!()
+        package
     }
 
     /// Get the firmware version - GetFwVer (0x3A)
@@ -1212,14 +1220,14 @@ where
     ///     0x00: Success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x3A
-    pub fn get_fw_ver(&mut self) -> (ConfirmationCode, FwVer) {
+    pub fn get_fw_ver(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::GetFwVer,
             Payload::GetFwVer,
         );
 
-        todo!()
+        package
     }
 
     /// Read product information - ReadProdInfo (0x3C)
@@ -1229,14 +1237,14 @@ where
     ///     0x00: Success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x3C
-    pub fn read_prod_info(&mut self) -> (ConfirmationCode, ProdInfo) {
+    pub fn read_prod_info(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::ReadProdInfo,
             Payload::ReadProdInfo,
         );
 
-        todo!()
+        package
     }
 
     /// Soft reset SoftRst (0x3D)
@@ -1247,10 +1255,10 @@ where
     ///     other: Device is abnormal
     /// Instuction code: 0x3D
     ///     After module reset, 0x55 will be automatically sent as a handshake sign. After the single-chip microcomputer detects 0x55, it can immediately send commands to enter the working state.
-    pub fn soft_rst(&mut self) -> ConfirmationCode {
+    pub fn soft_rst(&mut self) -> Package {
         let package = Package::build(Identifier::Command, Instruction::SoftRst, Payload::SoftRst);
 
-        todo!()
+        package
     }
 
     /// Aura control - AuraLedConfig (0x35)
@@ -1266,14 +1274,14 @@ where
         speed: Speed,
         color: Color,
         count: Times,
-    ) -> ConfirmationCode {
+    ) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::AuraLedConfig,
             Payload::AuraLedConfig(ctrl, speed, color, count),
         );
 
-        todo!()
+        package
     }
 
     /// Automatic registration template - AutoEnroll (0x31)
@@ -1306,7 +1314,7 @@ where
         allow_duplicate: bool,
         return_in_critical: bool,
         ask_finger_to_leave: bool,
-    ) -> (ConfirmationCode, IndexPage) {
+    ) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::AutoEnroll,
@@ -1319,7 +1327,7 @@ where
             ),
         );
 
-        todo!()
+        package
     }
 
     /// Automatic fingerprint verification - AutoIdentify (0x32)
@@ -1347,14 +1355,14 @@ where
         num: u8,
         times: u8,
         return_in_critical: bool,
-    ) -> (ConfirmationCode, IndexPage, MatchScore) {
+    ) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::AutoIdentify,
             Payload::AutoIdentify(grade, start, num, times, return_in_critical),
         );
 
-        todo!()
+        package
     }
 
     // # Other instructions
@@ -1366,14 +1374,14 @@ where
     ///     0x00: Generation success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x14
-    pub fn get_random_code(&mut self) -> (ConfirmationCode, u32) {
+    pub fn get_random_code(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::GetRandomCode,
             Payload::GetRandomCode,
         );
 
-        todo!()
+        package
     }
 
     /// To read information page - ReadInfPage
@@ -1387,14 +1395,14 @@ where
     /// Note: Module shall transfer following data packet after responding to the upper computer;
     /// Note: Packet Bytes N is determined by Packet Length. The value is 128 Bytes before delivery;
     /// Note: The instruction doesn't affect buffer contents;
-    pub fn read_inf_page(&mut self) -> (ConfirmationCode, Page) {
+    pub fn read_inf_page(&mut self) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::ReadInfPage,
             Payload::ReadInfPage,
         );
 
-        todo!()
+        package
     }
 
     /// To write note pad - WriteNotepad
@@ -1409,14 +1417,14 @@ where
         &mut self,
         note_page_number: NotePageNum,
         content: Page,
-    ) -> ConfirmationCode {
+    ) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::WriteNotepad,
             Payload::WriteNotepad(note_page_number, content),
         );
 
-        todo!()
+        package
     }
 
     /// To read note pad - ReadNotepad
@@ -1426,14 +1434,14 @@ where
     ///     0x00: Read success;
     ///     0x01: Error when receiving package;
     /// Instuction code: 0x19
-    pub fn read_notepad(&mut self, note_page_number: NotePageNum) -> (ConfirmationCode, Page) {
+    pub fn read_notepad(&mut self, note_page_number: NotePageNum) -> Package {
         let package = Package::build(
             Identifier::Command,
             Instruction::ReadNotepad,
             Payload::ReadNotepad(note_page_number),
         );
 
-        todo!()
+        package
     }
 }
 
@@ -1504,6 +1512,7 @@ pub enum BufferID {
     CharBuffer6 = 0x06,
 }
 
+#[allow(dead_code)]
 type MatchScore = u16;
 
 #[allow(dead_code)]
@@ -1541,6 +1550,7 @@ pub struct ProdInfo {
 }
 
 #[repr(u8)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum LightPattern {
     Breathing = 0x01,
     Flashing = 0x02,
@@ -1561,6 +1571,7 @@ impl From<LightPattern> for u8 {
 pub type Speed = u8;
 
 #[repr(u8)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Color {
     Red = 0b0000_0001,    // 0x01,
     Blue = 0b0000_0010,   // 0x02,
@@ -1630,81 +1641,104 @@ pub type Page = [u8; 512];
 /// # Instructions Table
 #[repr(u8)]
 pub enum Instruction {
-    /// Collect finger image
+    /// 1 = Collect finger image
     GenImg = 0x01,
-    /// To generate character file from image
+    /// 2 = To generate character file from image
     GenChar = 0x02,
-    /// Carry out precise matching of two templates;
+    /// 3 = Carry out precise matching of two templates;
     Match = 0x03,
-    /// Search the finger library
+    /// 4 = Search the finger library
     Search = 0x04,
-    /// To combine character files and generate template
+    /// 5 = To combine character files and generate template
     RegModel = 0x05,
-    /// To store template;
+    /// 6 = To store template;
     Store = 0x06,
-    /// To read/load template
+    /// 7 = To read/load template
     LoadChar = 0x07,
-    /// To upload template
+    /// 8 = To upload template
     UpChar = 0x08,
-    /// To download template
+    /// 9 = To download template
     DownChar = 0x09,
-    /// To upload image
+    /// 10 = To upload image
     UpImage = 0x0A,
-    /// To download image
+    /// 11 = To download image
     DownImage = 0x0B,
-    /// To delete tempates
+    /// 12 = To delete tempates
     DeleteChar = 0x0C,
-    /// To empty the library
+    /// 13 = To empty the library
     Empty = 0x0D,
-    /// To set system Paramete
+    /// 14 = To set system Paramete
     SetSysPara = 0x0E,
-    /// To read system Parameter
+    /// 15 = To read system Parameter
     ReadSysPara = 0x0F,
-    /// To set password
+    /// 18 = To set password
     SetPwd = 0x12,
-    /// To verify password
+    /// 19 = To verify password
     VfyPwd = 0x13,
-    /// To get random code
+    /// 20 = To get random code
     GetRandomCode = 0x14,
-    /// To set device address
+    /// 21 = To set device address
     SetAdder = 0x15,
-    /// Read information page
+    /// 22 = Read information page
     ReadInfPage = 0x16,
-    /// Port control
+    /// 23 = Port control
     Control = 0x17,
-    /// To write note pad
+    /// 24 = To write note pad
     WriteNotepad = 0x18,
-    /// To read note pad
+    /// 25 = To read note pad
     ReadNotepad = 0x19,
-    /// To read finger template numbers
+    /// 29 = To read finger template numbers
     TempleteNum = 0x1D,
-    /// Read fingerprint template index table
+    /// 31 = Read fingerprint template index table
     ReadIndexTable = 0x1F,
-    /// Fingerprint image collection extension command
+    /// 40 = Fingerprint image collection extension command
     GetImageEx = 0x28,
-    /// Cancel instruction
+    /// 48 = Cancel instruction
     Cancel = 0x30,
-    /// Automatic registration template
+    /// 49 = Automatic registration template
     AutoEnroll = 0x31,
-    /// Automatic fingerprint verification
+    /// 50 = Automatic fingerprint verification
     AutoIdentify = 0x32,
-    /// Aura Control
+    /// 53 = Aura Control
     AuraLedConfig = 0x35,
-    /// Check Sensor
+    /// 54 = Check Sensor
     CheckSensor = 0x36,
-    /// Get the algorithm library version
+    /// 57 = Get the algorithm library version
     GetAlgVer = 0x39,
-    /// Get the firmware version
+    /// 58 = Get the firmware version
     GetFwVer = 0x3A,
-    /// Read product information
+    /// 60 = Read product information
     ReadProdInfo = 0x3C,
-    /// Soft reset
+    /// 61 = Soft reset
     SoftRst = 0x3D,
-    /// Hand Shake
+    /// 64 = Hand Shake
     HandShake = 0x40,
 }
 impl From<Instruction> for u8 {
-    fn from(this: Instruction) -> u8 {
-        this.into()
+    fn from(item: Instruction) -> Self {
+        item as u8
+    }
+}
+
+// Checksum is calculated on 'length (2 bytes) + data (??)'.
+pub fn compute_checksum(buf: Vec<u8, 256>) -> u16 {
+    let mut checksum = 0u16;
+
+    let check_end = buf.len();
+    let checked_bytes = &buf[6..check_end];
+    for byte in checked_bytes {
+        checksum += (*byte) as u16;
+    }
+    return checksum;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let vfy_pwd = Payload::VfyPwd(0xFFFFFFFF_u32);
+        assert_eq!(vfy_pwd.len(), 4)
     }
 }
