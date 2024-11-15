@@ -445,63 +445,63 @@ impl Payload {
                 let bytes = password.to_be_bytes();
                 let _ = buffer.extend_from_slice(&bytes);
                 buffer
-            },
+            }
             Payload::SetPwd(password) => {
                 let bytes = password.to_be_bytes();
                 let _ = buffer.extend_from_slice(&bytes);
                 buffer
-            },
+            }
             Payload::SetAdder(address) => {
                 let bytes = address.to_be_bytes();
                 let _ = buffer.extend_from_slice(&bytes);
                 buffer
-            },
+            }
             Payload::SetSysPara(parameter_setting, value) => {
                 let _ = buffer.push(*parameter_setting as u8);
                 let _ = buffer.push(*value);
                 buffer
-            },
+            }
             Payload::ReadSysPara => buffer,
             Payload::TempleteNum => buffer,
             Payload::ReadIndexTable(index_page) => {
                 let _ = buffer.push(*index_page as u8);
                 buffer
-            },
+            }
             Payload::GenImg => buffer,
             Payload::Img2Tz(buffer_id) => {
                 let _ = buffer.push(*buffer_id as u8);
                 buffer
-            },
+            }
             Payload::UpImage => buffer,
             Payload::DownImage => buffer,
             Payload::GenChar(buffer_id) => {
                 let _ = buffer.push(*buffer_id as u8);
                 buffer
-            },
+            }
             Payload::RegModel => buffer,
             Payload::UpChar(buffer_id) => {
                 let _ = buffer.push(*buffer_id as u8);
                 buffer
-            },
+            }
             Payload::DownChar(buffer_id) => {
                 let _ = buffer.push(*buffer_id as u8);
                 buffer
-            },
+            }
             Payload::Store(buffer_id, index_page) => {
                 let _ = buffer.push(*buffer_id as u8);
                 let _ = buffer.push(*index_page as u8);
                 buffer
-            },
+            }
             Payload::LoadChar(buffer_id, index_page) => {
                 let _ = buffer.push(*buffer_id as u8);
                 let _ = buffer.push(*index_page as u8);
                 buffer
-            },
+            }
             Payload::DeleteChar(buffer_id, num) => {
                 let _ = buffer.push(*buffer_id as u8);
                 let _ = buffer.push(*num);
                 buffer
-            },
+            }
             Payload::Empty => buffer,
             Payload::Match => buffer,
             Payload::Search(buffer_id, start_id, num) => {
@@ -514,7 +514,7 @@ impl Payload {
                 let _ = buffer.extend_from_slice(&bytes);
 
                 buffer
-            },
+            }
             Payload::GetImageEx => buffer,
             Payload::Cancel => buffer,
             Payload::HandShake => buffer,
@@ -529,15 +529,21 @@ impl Payload {
                 let _ = buffer.push(*color as u8);
                 let _ = buffer.push(*times);
                 buffer
-            },
-            Payload::AutoEnroll(index_page, allow_cover_id,allow_duplicate, return_in_critical, ask_finger_to_leave) => {
+            }
+            Payload::AutoEnroll(
+                index_page,
+                allow_cover_id,
+                allow_duplicate,
+                return_in_critical,
+                ask_finger_to_leave,
+            ) => {
                 let _ = buffer.push(*index_page as u8);
                 let _ = buffer.push(*allow_cover_id as u8);
                 let _ = buffer.push(*allow_duplicate as u8);
                 let _ = buffer.push(*return_in_critical as u8);
                 let _ = buffer.push(*ask_finger_to_leave as u8);
                 buffer
-            },
+            }
             Payload::AutoIdentify(safe_grade, start, num, times, return_in_critical) => {
                 let _ = buffer.push(*safe_grade as u8);
                 let _ = buffer.push(*start);
@@ -545,7 +551,7 @@ impl Payload {
                 let _ = buffer.push(*times);
                 let _ = buffer.push(*return_in_critical as u8);
                 buffer
-            },
+            }
             Payload::GetRandomCode => buffer,
             Payload::ReadInfPage => buffer,
             Payload::WriteNotepad(note_page_num, page) => {
@@ -554,11 +560,11 @@ impl Payload {
                     let _ = buffer.push(*byte);
                 }
                 buffer
-            },
+            }
             Payload::ReadNotepad(note_page_num) => {
                 let _ = buffer.push(*note_page_num);
                 buffer
-            },
+            }
         }
     }
 }
@@ -1228,12 +1234,7 @@ where
     ///     0x09: No matching in the library (both the PageID and matching score are 0);
     /// Instuction code: 0x04
     /// Note: The instruction doesn't affect the contents of the buffers.
-    pub fn search(
-        &mut self,
-        buffer_id: BufferID,
-        start_page: u16,
-        num: u16,
-    ) -> Package {
+    pub fn search(&mut self, buffer_id: BufferID, start_page: u16, num: u16) -> Package {
         Package::build(
             Identifier::Command,
             Instruction::Search,
@@ -1503,11 +1504,7 @@ where
     ///     0x01: Error when receiving package;
     ///     0x18: Error when write FLASH;
     /// Instuction code: 0x18
-    pub fn write_notepad(
-        &mut self,
-        note_page_number: NotePageNum,
-        content: Page,
-    ) -> Package {
+    pub fn write_notepad(&mut self, note_page_number: NotePageNum, content: Page) -> Package {
         Package::build(
             Identifier::Command,
             Instruction::WriteNotepad,
