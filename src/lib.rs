@@ -42,150 +42,87 @@ where
     }
 }
 
-impl R503 {
-    pub async fn get_rand_code<S>(&self, serial: &mut S) -> Result<u32, Error<S>>
+pub struct Command<T: ToWire> {
+    address: u32,
+    instruction: Commands,
+    body: T,
+}
+
+impl<T: ToWire> Command<T> {
+    pub async fn to_wire<S>(&self, serial: &mut S) -> Result<(), Error<S>>
     where
         S: Read + Write + ErrorType,
     {
-        // Send the command
-        //
-        let tx_fut = async {
-            // Header
-            serial.write_all(&[0xEF, 0x01]).await?;
-            // Adder
-            serial.write_all(&self.address.to_be_bytes()).await?;
+        // Header
+        0xEF01u16.to_wire(serial, None).await?;
+        // Adder
+        self.address.to_wire(serial, None).await?;
 
-            // CRC starts here!
-            let mut crc = Checksum::new();
+        // CRC starts here!
+        let mut crc = Checksum::new();
 
-            // Package Identifier
-            let ident = PackageIdentifier::CommandPacket.to_bytes();
-            crc.update(&ident);
-            serial.write_all(&ident).await?;
+        // Package Identifier
+        PackageIdentifier::CommandPacket.to_wire(serial, Some(&mut crc)).await?;
 
-            // length
-            let length = 3u16.to_be_bytes(); // command + CRC
-            crc.update(&length);
-            serial.write_all(&length).await?;
+        // length
+        let blen = self.body.size_on_wire();
+        // command + CRC
+        ((3 + blen) as u16).to_wire(serial, Some(&mut crc)).await?;
 
-            // command
-            let cmd = Commands::GetRandomCode.to_bytes();
-            crc.update(&cmd);
-            serial.write_all(&cmd).await?;
+        // command
+        self.instruction.to_wire(serial, Some(&mut crc)).await?;
 
-            // CRC
-            serial.write_all(&crc.finalize().to_be_bytes()).await?;
+        // body (optional)
+        self.body.to_wire(serial, Some(&mut crc)).await?;
 
-            Ok(())
-        };
-        tx_fut.await.map_err(Error::Wire)?;
+        // CRC
+        crc.finalize().to_wire(serial, None).await?;
 
-        // Receive the data
-        // TODO: Timeout?
-        // total size is 16 bytes
-        let mut rx_buf = [0u8; 16];
-        match serial.read_exact(&mut rx_buf).await {
-            Ok(()) => {}
-            Err(ReadExactError::UnexpectedEof) => return Err(Error::EndOfFile),
-            Err(ReadExactError::Other(w)) => return Err(Error::Wire(w)),
-        };
-        let resp = Response::from_slice(&rx_buf)?;
-        let mut good = true;
-        good &= resp.address == self.address;
-        good &= resp.ident == PackageIdentifier::AcknowledgePacket.into();
-        good &= [resp.confirmation] == ConfirmationCode::SuccessCode.to_bytes();
-        good &= resp.body.len() == 4;
-        if !good {
-            return Err(Error::IncorrectData);
-        }
-        Ok(take_u32::<S>(resp.body)?.0)
+        Ok(())
     }
 }
 
-// pub struct Command<'a> {
-//     address: u32,
-//     instruction: u8,
-//     body: &'a [u8],
-// }
-
-pub struct Response<'a> {
+pub struct Response<T> {
     address: u32,
     ident: u8,
-    confirmation: u8,
-    body: &'a [u8],
+    confirmation: ConfirmationCode,
+    body: T,
 }
 
-impl<'a> Response<'a> {
-    pub fn from_slice<S: ErrorType>(sli: &'a [u8]) -> Result<Self, Error<S>> {
+impl<T> Response<T> {
+    pub async fn from_wire<S: ErrorType + Read>(serial: &mut S) -> Result<Self, Error<S>>
+    where
+        T: FromWire,
+    {
         // Do we have the right header?
-        let remain = take_header::<S>(sli)?;
-        let (address, remain) = take_u32::<S>(remain)?;
+        let hdr = u16::from_wire(serial, None).await?;
+        if hdr != 0xEF01 {
+            return Err(Error::IncorrectData);
+        }
+
+        let address = u32::from_wire(serial, None).await?;
 
         // The remaining bits are checksum relevant!
-        let temp_len = remain.len();
-        if remain.len() < 2 {
-            return Err(Error::IncorrectData);
-        }
-        let (remain, cksm) = remain.split_at(temp_len - 2);
-        // does the checksum check?
-        let mut check = Checksum::new();
-        check.update(remain);
-        let calc = check.finalize();
-        if calc.to_be_bytes() != cksm {
-            return Err(Error::IncorrectData);
-        }
+        let mut cksm = Checksum::new();
+        let ident = u8::from_wire(serial, Some(&mut cksm)).await?;
+        // TODO: check len?
+        let _len = u16::from_wire(serial, Some(&mut cksm)).await?;
+        let confirmation = ConfirmationCode::from_wire(serial, Some(&mut cksm)).await?;
+        let body = T::from_wire(serial, Some(&mut cksm)).await?;
 
-        let (ident, remain) = take_u8::<S>(remain)?;
-        let (len, remain) = take_u16::<S>(remain)?;
-        let (confirmation, remain) = take_u8::<S>(remain)?;
-        let len_usize = len as usize;
-        // Does length match, counting the CRC and confirmation bytes?
-        if (remain.len() + 3) != len_usize {
+        let calc_cksm = cksm.finalize();
+        let rept_cksm = u16::from_wire(serial, None).await?;
+
+        if calc_cksm != rept_cksm {
             return Err(Error::IncorrectData);
         }
         Ok(Self {
             address,
             ident,
             confirmation,
-            body: remain,
+            body,
         })
     }
-}
-
-fn take_header<S: ErrorType>(sli: &[u8]) -> Result<&[u8], Error<S>> {
-    if sli.len() < 2 {
-        return Err(Error::IncorrectData);
-    }
-    let (now, later) = sli.split_at(2);
-    if now != [0xEF, 0x01] {
-        return Err(Error::IncorrectData);
-    }
-    Ok(later)
-}
-
-fn take_u8<S: ErrorType>(sli: &[u8]) -> Result<(u8, &[u8]), Error<S>> {
-    let (now, later) = sli.split_first().ok_or(Error::IncorrectData)?;
-    Ok((*now, later))
-}
-
-fn take_u16<S: ErrorType>(sli: &[u8]) -> Result<(u16, &[u8]), Error<S>> {
-    if sli.len() < 2 {
-        return Err(Error::IncorrectData);
-    }
-    let (now, later) = sli.split_at(2);
-    let mut buf = [0u8; 2];
-    buf.copy_from_slice(now);
-    Ok((u16::from_be_bytes(buf), later))
-}
-
-fn take_u32<S: ErrorType>(sli: &[u8]) -> Result<(u32, &[u8]), Error<S>> {
-    if sli.len() < 4 {
-        return Err(Error::IncorrectData);
-    }
-    let (now, later) = sli.split_at(4);
-    let mut buf = [0u8; 4];
-    buf.copy_from_slice(now);
-    Ok((u32::from_be_bytes(buf), later))
 }
 
 pub struct Checksum {
@@ -268,6 +205,34 @@ macro_rules! be_enum {
                 }
             }
         }
+
+        impl ToWire for $enum_name {
+            fn size_on_wire(&self) -> usize {
+                size_of::<$int_ty>()
+            }
+
+            async fn to_wire<S: Write + ErrorType>(
+                &self,
+                serial: &mut S,
+                cksm: Option<&mut Checksum>,
+            ) -> Result<(), Error<S>> {
+                let val: $int_ty = (*self).into();
+                val.to_wire(serial, cksm).await
+            }
+        }
+
+        impl FromWire for $enum_name {
+            async fn from_wire<S: Read + ErrorType>(
+                serial: &mut S,
+                cksm: Option<&mut Checksum>,
+            ) -> Result<Self, Error<S>> {
+                let val = <$int_ty>::from_wire(serial, cksm).await?;
+                match Self::try_from(val) {
+                    Ok(v) => Ok(v),
+                    Err(_) => Err(Error::IncorrectData)
+                }
+            }
+        }
     };
 }
 
@@ -296,5 +261,157 @@ be_enum! {
     {
         SuccessCode -> 0x00,
         ErrorCode -> 0x01,
+    }
+}
+
+pub trait ToWire {
+    fn size_on_wire(&self) -> usize;
+    fn to_wire<S: Write + ErrorType>(
+        &self,
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> impl core::future::Future<Output = Result<(), Error<S>>>;
+}
+
+impl ToWire for [u8] {
+    fn size_on_wire(&self) -> usize {
+        self.len()
+    }
+
+    async fn to_wire<S: Write + ErrorType>(
+        &self,
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> Result<(), Error<S>> {
+        if let Some(cksm) = cksm {
+            cksm.update(self);
+        }
+        serial.write_all(self).await.map_err(Error::Wire)
+    }
+}
+
+macro_rules! wire_ints {
+    ($($int_ty:ty),*) => {
+        $(
+            impl ToWire for $int_ty {
+                fn size_on_wire(&self) -> usize {
+                    size_of::<$int_ty>()
+                }
+
+                async fn to_wire<S: Write + ErrorType>(
+                    &self,
+                    serial: &mut S,
+                    cksm: Option<&mut Checksum>,
+                ) -> Result<(), Error<S>> {
+                    let bytes = (*self).to_be_bytes();
+                    if let Some(cksm) = cksm {
+                        cksm.update(&bytes);
+                    }
+                    serial.write_all(&bytes).await.map_err(Error::Wire)
+                }
+            }
+
+            impl FromWire for $int_ty {
+                async fn from_wire<S: Read + ErrorType>(
+                    serial: &mut S,
+                    cksm: Option<&mut Checksum>,
+                ) -> Result<Self, Error<S>> {
+                    let mut buf = [0u8; size_of::<$int_ty>()];
+                    match serial.read_exact(&mut buf).await {
+                        Ok(()) => {}
+                        Err(ReadExactError::UnexpectedEof) => return Err(Error::EndOfFile),
+                        Err(ReadExactError::Other(w)) => return Err(Error::Wire(w)),
+                    };
+                    if let Some(cksm) = cksm {
+                        cksm.update(&buf);
+                    }
+                    Ok(<$int_ty>::from_be_bytes(buf))
+                }
+            }
+        )*
+    };
+}
+
+wire_ints!(u8, u16, u32);
+
+impl ToWire for () {
+    fn size_on_wire(&self) -> usize {
+        0
+    }
+
+    async fn to_wire<S: Write + ErrorType>(
+        &self,
+        _serial: &mut S,
+        _cksm: Option<&mut Checksum>,
+    ) -> Result<(), Error<S>> {
+        Ok(())
+    }
+}
+
+impl FromWire for () {
+    async fn from_wire<S: Read + ErrorType>(
+        _serial: &mut S,
+        _cksm: Option<&mut Checksum>,
+    ) -> Result<Self, Error<S>> {
+        Ok(())
+    }
+}
+
+pub trait FromWire: Sized {
+    fn from_wire<S: Read + ErrorType>(
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> impl core::future::Future<Output = Result<Self, Error<S>>>;
+}
+
+macro_rules! cmds_with_ack {
+    (
+        | Function      | Code          | CmdDataTy     | RespDataTy    |
+        | $(-)*         | $(-)*         | $(-)*         | $(-)*         |
+        | $func:ident   | $code:ident | $($cdt:ty)?   | $($rdy:ty)?   |
+    ) => {
+        #[allow(unused_parens)]
+        pub async fn $func<S>(&self, serial: &mut S, $(arg: $cdt)?) -> Result<($($rdy)?), Error<S>>
+        where
+            S: Read + Write + ErrorType,
+        {
+            // Send the command
+            //
+            let cmd = Command {
+                address: self.address,
+                instruction: Commands::$code,
+                body: {
+                    let _body = ();
+                    $(
+                        let _body: $cdt = arg;
+                    )?
+                    _body
+                },
+            };
+            cmd.to_wire(serial).await?;
+
+            // Receive the data
+            // TODO: Timeout?
+            //
+            // We expect 4 data bytes back
+            let resp = Response::<($($rdy)?)>::from_wire(serial).await?;
+
+            let mut good = true;
+            good &= resp.address == self.address;
+            good &= resp.ident == PackageIdentifier::AcknowledgePacket.into();
+            good &= resp.confirmation == ConfirmationCode::SuccessCode;
+            if !good {
+                return Err(Error::IncorrectData);
+            }
+            Ok(resp.body)
+        }
+    };
+}
+
+impl R503 {
+    cmds_with_ack!{
+        | Function          | Code                      | CmdDataTy         | RespDataTy    |
+        | --------          | ----                      | ---------         | ----------    |
+        | get_rand_code     | GetRandomCode             |                   | u32           |
     }
 }
