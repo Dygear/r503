@@ -21,6 +21,7 @@ where
     Wire(S::Error),
     IncorrectData,
     EndOfFile,
+    BadConfirmation(ConfirmationCode),
 }
 
 impl<S> Debug for Error<S>
@@ -38,6 +39,12 @@ where
             }
             Error::IncorrectData => f.write_str("Error::IncorrectData"),
             Error::EndOfFile => f.write_str("Error::EndOfFile"),
+            Error::BadConfirmation(c) => {
+                f.write_str("Error::BadConfirmation(")?;
+                f.write_fmt(format_args!("{c:?}"))?;
+                f.write_str(")")?;
+                Ok(())
+            }
         }
     }
 }
@@ -62,7 +69,9 @@ impl<T: ToWire> Command<T> {
         let mut crc = Checksum::new();
 
         // Package Identifier
-        PackageIdentifier::CommandPacket.to_wire(serial, Some(&mut crc)).await?;
+        PackageIdentifier::CommandPacket
+            .to_wire(serial, Some(&mut crc))
+            .await?;
 
         // length
         let blen = self.body.size_on_wire();
@@ -251,6 +260,11 @@ be_enum! {
     name: Commands;
     integer: u8;
     {
+        GetImage -> 0x01,
+        GenChar -> 0x02,
+        RegModel -> 0x05,
+        UpChar -> 0x08,
+        UpImage -> 0x0A,
         GetRandomCode -> 0x14,
         ReadSystemParameter -> 0x0F,
     }
@@ -260,8 +274,91 @@ be_enum! {
     name: ConfirmationCode;
     integer: u8;
     {
+        // 0 = Commad Execution Complete;
         SuccessCode -> 0x00,
+        // 1 = Error When Receiving Data Package;
         ErrorCode -> 0x01,
+        // 2 -> No Finger on the Sensor;
+        NoFingerOnSensor -> 0x02,
+        // 3 -> Fail to Enroll the Finger;
+        FailToEnrollFinger -> 0x03,
+        // 6 -> Fail to Generate Character File Due to the Over-disorderly Fingerprint Image;
+        FailToGenerateCharacterOverDisorderlyFingerprintImage -> 0x06,
+        // 7 -> Fail to Generate Character File due to Lackness of Character Point or Over-smallness of Fingerprint Image;
+        FailToGenerateCharacterLacknessOfCharacterPointOrOverSmallness -> 0x07,
+        // 8 -> Finger Doesn't Match;
+        FailFingerDoesntMatch -> 0x08,
+        // 9 -> Fail to Find the Matching Finger;
+        FailToFindMatchingFinger -> 0x09,
+        // 10 -> Fail to Combine the Character Files;
+        FailToCombineCharacterFiles -> 0x0A,
+        // 11 -> Addressing PageID is Beyond the Finger Library;
+        AddressingPageIDIsBeyoundTheFingerLibary -> 0x0B,
+        // 12 -> Error When Reading Template from Library or the Template is Invalid;
+        ErrorWhenReadingTemplateFromLibararORTemplateIsInvalid -> 0x0C,
+        // 13 -> Error When Uploading Template;
+        ErrorWhenUploadingTemplate -> 0x0D,
+        // 14 -> Module can't receive the following data packages;
+        ModuleCantReceivingTheFollowingDataPackages -> 0x0E,
+        // 15 -> Error when uploading image;
+        ErrorWhenUploadingImage -> 0x0F,
+        // 16 -> Fail to delete the template;
+        FailToDeleteTheTemplate -> 0x10,
+        // 17 -> Fail to clear finger library;
+        FailToClearFingerLibary -> 0x11,
+        // 19 -> Wrong password;
+        WrongPassword -> 0x13,
+        // 21 -> Fail to generate the image for the lackness of valid primary image;
+        FailToGenerateImageLacknessOfValidPrimaryImage -> 0x15,
+        // 24 -> Error when writing flash;
+        ErrorWhenWritingFlash -> 0x18,
+        // 25 -> No definition error;
+        NoDefinitionError -> 0x19,
+        // 26 -> Invalid register number;
+        InvalidRegisterNumber -> 0x1A,
+        // 27 -> Incorrect configuration of register;
+        IncorrectConfigurationOfRegister -> 0x1B,
+        // 28 -> Wrong notepad page number;
+        WrongNotepadPageNumber -> 0x1C,
+        // 29 -> Fail to operate the communication port;
+        FailToOperateTheCommunicationPort -> 0x1D,
+        // 31 -> The fingerprint libary is full;
+        FingerPrintLibaryFull -> 0x1F,
+        // 32 -> The address code is incorrect;
+        AddressIncorrect -> 0x20,
+        // 33 -> The password must be verified;
+        MustVerifyPassword -> 0x21,
+        // 34 -> The fingerprint template is empty;
+        FingerTemplateEmpty -> 0x22,
+        // 36 -> The fingerprint library is empty;
+        FingerLibaryEmpty -> 0x24,
+        // 38 -> Timeout;
+        Timeout -> 0x26,
+        // 39 -> The fingerprints already exist;
+        FingerAlreadyExists -> 0x27,
+        // 41 Sensor hardware error;
+        SensorHardwareError -> 0x29,
+        // 252 -> Unsupported command;
+        UnsupportedCommand -> 0xFC,
+        // 253 -> Hardware Error;
+        HardwareError -> 0xFD,
+        // 254 -> Command execution failure;
+        CommandExecutionFailure -> 0xFE,
+        // 255 Others: System Reserved; (And Default for this Rust Lib);
+        SystemReserved -> 0xFF,
+    }
+}
+
+be_enum! {
+    name: CharBufferId;
+    integer: u8;
+    {
+        One -> 0x01,
+        Two -> 0x02,
+        Three -> 0x03,
+        Four -> 0x04,
+        Five -> 0x05,
+        Six -> 0x06,
     }
 }
 
@@ -431,9 +528,11 @@ macro_rules! cmds_with_ack {
                 let mut good = true;
                 good &= resp.address == self.address;
                 good &= resp.ident == PackageIdentifier::AcknowledgePacket.into();
-                good &= resp.confirmation == ConfirmationCode::SuccessCode;
                 if !good {
                     return Err(Error::IncorrectData);
+                }
+                if resp.confirmation != ConfirmationCode::SuccessCode {
+                    return Err(Error::BadConfirmation(resp.confirmation));
                 }
                 Ok(resp.body)
             }
@@ -442,10 +541,82 @@ macro_rules! cmds_with_ack {
 }
 
 impl R503 {
-    cmds_with_ack!{
+    cmds_with_ack! {
         | Function              | Code                      | CmdDataTy         | RespDataTy    |
         | --------              | ----                      | ---------         | ----------    |
         | get_rand_code         | GetRandomCode             |                   | u32           |
         | read_system_parameter | ReadSystemParameter       |                   | [u8; 16]      |
+        | get_image             | GetImage                  |                   |               |
+        | upload_image          | UpImage                   |                   |               |
+        | generate_char         | GenChar                   | CharBufferId      |               |
+        | generate_template     | RegModel                  |                   |               |
+        | upload_template       | UpChar                    | CharBufferId      |               |
+    }
+}
+
+impl R503 {
+    pub async fn stream_image<S: Read + ErrorType>(
+        &self,
+        serial: &mut S,
+        out_buf: &mut [u8],
+    ) -> Result<usize, Error<S>> {
+        let mut more = true;
+        let ttl_len = out_buf.len();
+        let mut window = out_buf;
+        while more {
+            // Do we have the right header?
+            let hdr = u16::from_wire(serial, None).await?;
+            if hdr != 0xEF01 {
+                return Err(Error::IncorrectData);
+            }
+
+            let address = u32::from_wire(serial, None).await?;
+            if address != self.address {
+                return Err(Error::IncorrectData);
+            }
+
+            // The remaining bits are checksum relevant!
+            let mut cksm = Checksum::new();
+            let ident = u8::from_wire(serial, Some(&mut cksm)).await?;
+
+            match ident {
+                0x02 => {
+                    // "Have following packet"
+                }
+                0x08 => {
+                    // "end packet"
+                    more = false;
+                }
+                _ => return Err(Error::IncorrectData),
+            }
+
+            let len = u16::from_wire(serial, Some(&mut cksm)).await?;
+
+            if len < 2 {
+                return Err(Error::IncorrectData);
+            }
+            let len_img = (len - 2) as usize;
+            if window.len() < len_img {
+                // TODO better error
+                return Err(Error::IncorrectData);
+            }
+            let (now, later) = window.split_at_mut(len_img);
+            window = later;
+            match serial.read_exact(now).await {
+                Ok(()) => {}
+                Err(ReadExactError::UnexpectedEof) => return Err(Error::EndOfFile),
+                Err(ReadExactError::Other(w)) => return Err(Error::Wire(w)),
+            };
+            cksm.update(now);
+
+            let calc_cksm = cksm.finalize();
+            let rept_cksm = u16::from_wire(serial, None).await?;
+
+            if calc_cksm != rept_cksm {
+                return Err(Error::IncorrectData);
+            }
+        }
+        let used = ttl_len - window.len();
+        Ok(used)
     }
 }
