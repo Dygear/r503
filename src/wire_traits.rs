@@ -116,7 +116,6 @@ impl FromWire for () {
     }
 }
 
-
 impl<const N: usize> ToWire for [u8; N] {
     fn size_on_wire(&self) -> usize {
         N

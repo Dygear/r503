@@ -3,8 +3,8 @@
 use core::fmt::Debug;
 
 use constants::{CharBufferId, Commands, ConfirmationCode, PackageIdentifier};
-use wire_traits::{FromWire, ToWire};
 use embedded_io_async::{ErrorType, Read, ReadExactError, Write};
+use wire_traits::{FromWire, ToWire};
 
 pub mod constants;
 pub mod wire_traits;
