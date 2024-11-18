@@ -252,6 +252,7 @@ be_enum! {
     integer: u8;
     {
         GetRandomCode -> 0x14,
+        ReadSystemParameter -> 0x0F,
     }
 }
 
@@ -357,6 +358,20 @@ impl FromWire for () {
     }
 }
 
+impl<const N: usize> ToWire for [u8; N] {
+    fn size_on_wire(&self) -> usize {
+        N
+    }
+
+    async fn to_wire<S: Write + ErrorType>(
+        &self,
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> Result<(), Error<S>> {
+        self.as_slice().to_wire(serial, cksm).await
+    }
+}
+
 pub trait FromWire: Sized {
     fn from_wire<S: Read + ErrorType>(
         serial: &mut S,
@@ -364,54 +379,73 @@ pub trait FromWire: Sized {
     ) -> impl core::future::Future<Output = Result<Self, Error<S>>>;
 }
 
+impl<const N: usize> FromWire for [u8; N] {
+    async fn from_wire<S: Read + ErrorType>(
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> Result<Self, Error<S>> {
+        let mut buf = [0u8; N];
+        match serial.read_exact(&mut buf).await {
+            Ok(()) => {}
+            Err(ReadExactError::UnexpectedEof) => return Err(Error::EndOfFile),
+            Err(ReadExactError::Other(w)) => return Err(Error::Wire(w)),
+        };
+        if let Some(cksm) = cksm {
+            cksm.update(&buf);
+        }
+        Ok(buf)
+    }
+}
+
 macro_rules! cmds_with_ack {
     (
         | Function      | Code          | CmdDataTy     | RespDataTy    |
         | $(-)*         | $(-)*         | $(-)*         | $(-)*         |
-        | $func:ident   | $code:ident | $($cdt:ty)?   | $($rdy:ty)?   |
+     $( | $func:ident   | $code:ident   | $($cdt:ty)?   | $($rdy:ty)?   | )*
     ) => {
-        #[allow(unused_parens)]
-        pub async fn $func<S>(&self, serial: &mut S, $(arg: $cdt)?) -> Result<($($rdy)?), Error<S>>
-        where
-            S: Read + Write + ErrorType,
-        {
-            // Send the command
-            //
-            let cmd = Command {
-                address: self.address,
-                instruction: Commands::$code,
-                body: {
-                    let _body = ();
-                    $(
-                        let _body: $cdt = arg;
-                    )?
-                    _body
-                },
-            };
-            cmd.to_wire(serial).await?;
+        $(
+            #[allow(unused_parens)]
+            pub async fn $func<S>(&self, serial: &mut S, $(arg: $cdt)?) -> Result<($($rdy)?), Error<S>>
+            where
+                S: Read + Write + ErrorType,
+            {
+                // Send the command
+                //
+                let cmd = Command {
+                    address: self.address,
+                    instruction: Commands::$code,
+                    body: {
+                        let _body = ();
+                        $(
+                            let _body: $cdt = arg;
+                        )?
+                        _body
+                    },
+                };
+                cmd.to_wire(serial).await?;
 
-            // Receive the data
-            // TODO: Timeout?
-            //
-            // We expect 4 data bytes back
-            let resp = Response::<($($rdy)?)>::from_wire(serial).await?;
+                // Receive the data
+                // TODO: Timeout?
+                let resp = Response::<($($rdy)?)>::from_wire(serial).await?;
 
-            let mut good = true;
-            good &= resp.address == self.address;
-            good &= resp.ident == PackageIdentifier::AcknowledgePacket.into();
-            good &= resp.confirmation == ConfirmationCode::SuccessCode;
-            if !good {
-                return Err(Error::IncorrectData);
+                let mut good = true;
+                good &= resp.address == self.address;
+                good &= resp.ident == PackageIdentifier::AcknowledgePacket.into();
+                good &= resp.confirmation == ConfirmationCode::SuccessCode;
+                if !good {
+                    return Err(Error::IncorrectData);
+                }
+                Ok(resp.body)
             }
-            Ok(resp.body)
-        }
+        )*
     };
 }
 
 impl R503 {
     cmds_with_ack!{
-        | Function          | Code                      | CmdDataTy         | RespDataTy    |
-        | --------          | ----                      | ---------         | ----------    |
-        | get_rand_code     | GetRandomCode             |                   | u32           |
+        | Function              | Code                      | CmdDataTy         | RespDataTy    |
+        | --------              | ----                      | ---------         | ----------    |
+        | get_rand_code         | GetRandomCode             |                   | u32           |
+        | read_system_parameter | ReadSystemParameter       |                   | [u8; 16]      |
     }
 }
