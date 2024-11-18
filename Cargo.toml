@@ -11,3 +11,7 @@ heapless = "0.8"
 pretty-hex = "0.4"
 log = "0.4"
 
+[features]
+default = []
+std = []
+
