@@ -2,12 +2,11 @@
 
 use core::fmt::Debug;
 
-use constants::{
-    AuraControlPayload, AutoEnrollStep, CharBufferId, Commands, ConfirmationCode, PackageIdentifier,
-};
+use constants::{AuraControlPayload, CharBufferId, Commands, ConfirmationCode, IndexTableIdx, PackageIdentifier};
 use embedded_io_async::{ErrorType, Read, ReadExactError, Write};
 use wire_traits::{FromWire, ToWire};
 
+pub mod auto;
 pub mod constants;
 pub mod wire_traits;
 
@@ -188,6 +187,10 @@ impl R503 {
         Self { address: addr }
     }
 
+    pub fn address(&self) -> u32 {
+        self.address
+    }
+
     pub async fn stream_image<S: Read + ErrorType>(
         &self,
         serial: &mut S,
@@ -254,260 +257,6 @@ impl R503 {
     }
 }
 
-pub struct AutoEnroll<'a, S: Read + Write + ErrorType> {
-    address: u32,
-    serial: &'a mut S,
-}
-
-pub struct AutoEnrollLocation {
-    val: u8,
-}
-
-impl AutoEnrollLocation {
-    pub fn specific(loc: u8) -> Option<Self> {
-        if (0x00..0xC8).contains(&loc) {
-            Some(Self { val: loc })
-        } else {
-            None
-        }
-    }
-
-    pub fn automatic() -> Self {
-        Self { val: 0xC8 }
-    }
-}
-
-pub struct AutoEnrollConfig {
-    /// fingerprint location
-    pub location: AutoEnrollLocation,
-    /// allow "cover ID number" (I don't know what this means)
-    pub cover_id: bool,
-    /// allow duplicate fingerprints
-    pub allow_dupes: bool,
-    /// "Module return the status in the critical step" (I don't know what this means)
-    pub return_status: bool,
-    /// "Finger have to leave in order to enter the next image collection"
-    pub require_release: bool,
-}
-
-impl Default for AutoEnrollConfig {
-    fn default() -> Self {
-        Self {
-            location: AutoEnrollLocation::automatic(),
-            cover_id: false,
-            allow_dupes: false,
-            return_status: true,
-            require_release: true,
-        }
-    }
-}
-
-impl ToWire for AutoEnrollConfig {
-    fn size_on_wire(&self) -> usize {
-        5
-    }
-
-    async fn to_wire<S: Write + ErrorType>(
-        &self,
-        serial: &mut S,
-        cksm: Option<&mut Checksum>,
-    ) -> Result<(), Error<S>> {
-        let data = [
-            self.location.val,
-            self.cover_id as u8,
-            self.allow_dupes as u8,
-            self.return_status as u8,
-            self.require_release as u8,
-        ];
-        if let Some(c) = cksm {
-            c.update(&data);
-        }
-        serial.write_all(&data).await.map_err(Error::Wire)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct AutoEnrollResponse {
-    pub step: AutoEnrollStep,
-    pub model_id: u8,
-}
-
-impl FromWire for AutoEnrollResponse {
-    async fn from_wire<S: Read + ErrorType>(
-        serial: &mut S,
-        cksm: Option<&mut Checksum>,
-    ) -> Result<Self, Error<S>> {
-        let mut bytes = [0u8; 3];
-        match serial.read_exact(&mut bytes).await {
-            Ok(()) => {}
-            Err(ReadExactError::UnexpectedEof) => return Err(Error::EndOfFile),
-            Err(ReadExactError::Other(w)) => return Err(Error::Wire(w)),
-        };
-
-        if let Some(c) = cksm {
-            c.update(&bytes);
-        }
-
-        // I'm not sure what this unused byte is for?
-        let [step, _unused, id] = bytes;
-
-        let Ok(step) = AutoEnrollStep::try_from(step) else {
-            return Err(Error::IncorrectData);
-        };
-        // TODO: it seems like model id is returned in every step?
-        let model_id = id;
-
-        Ok(Self { step, model_id })
-    }
-}
-
-impl<'a, S> AutoEnroll<'a, S>
-where
-    S: Read + Write + ErrorType,
-{
-    pub fn new(address: u32, serial: &'a mut S) -> Self {
-        Self { address, serial }
-    }
-
-    /// All the steps, without yielding back control to get progress
-    /// notifications
-    pub async fn oneshot(mut self, cfg: AutoEnrollConfig) -> Result<u8, Error<S>> {
-        self.start(cfg).await?;
-        self.wait_collect_image1().await?;
-        self.wait_generate_feature1().await?;
-        self.wait_collect_image2().await?;
-        self.wait_generate_feature2().await?;
-        self.wait_collect_image3().await?;
-        self.wait_generate_feature3().await?;
-        self.wait_collect_image4().await?;
-        self.wait_generate_feature4().await?;
-        self.wait_collect_image5().await?;
-        self.wait_generate_feature5().await?;
-        self.wait_collect_image6().await?;
-        self.wait_generate_feature6().await?;
-        self.wait_repeatfingerprint().await?;
-        self.wait_merge_feature().await?;
-        self.wait_storage_template().await
-    }
-
-    /// Step 0
-    pub async fn start(&mut self, cfg: AutoEnrollConfig) -> Result<(), Error<S>> {
-        let command = Command {
-            address: self.address,
-            instruction: Commands::AutomaticRegistrationTemplate,
-            body: cfg,
-        };
-        command.to_wire(self.serial).await
-    }
-
-    // 0x01: Collect image for the first time
-    pub async fn wait_collect_image1(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::CollectImage1)
-            .await
-            .map(drop)
-    }
-    // 0x02: Generate Feature for the first time
-    pub async fn wait_generate_feature1(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::GenerateFeature1)
-            .await
-            .map(drop)
-    }
-    // 0x03: Collect image for the second time
-    pub async fn wait_collect_image2(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::CollectImage2)
-            .await
-            .map(drop)
-    }
-    // 0x04: Generate Feature for the second time
-    pub async fn wait_generate_feature2(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::GenerateFeature2)
-            .await
-            .map(drop)
-    }
-    // 0x05: Collect image for the third time
-    pub async fn wait_collect_image3(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::CollectImage3)
-            .await
-            .map(drop)
-    }
-    // 0x06: Generate Feature for the third time
-    pub async fn wait_generate_feature3(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::GenerateFeature3)
-            .await
-            .map(drop)
-    }
-    // 0x07: Collect image for the fourth time
-    pub async fn wait_collect_image4(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::CollectImage4)
-            .await
-            .map(drop)
-    }
-    // 0x08: Generate Feature for the fourth time
-    pub async fn wait_generate_feature4(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::GenerateFeature4)
-            .await
-            .map(drop)
-    }
-    // 0x09: Collect image for the fifth time
-    pub async fn wait_collect_image5(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::CollectImage5)
-            .await
-            .map(drop)
-    }
-    // 0x10: Generate Feature for the fifth time
-    pub async fn wait_generate_feature5(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::GenerateFeature5)
-            .await
-            .map(drop)
-    }
-    // 0x11: Collect image for the sixth time
-    pub async fn wait_collect_image6(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::CollectImage6)
-            .await
-            .map(drop)
-    }
-    // 0x12: Generate Feature for the sixth time
-    pub async fn wait_generate_feature6(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::GenerateFeature6)
-            .await
-            .map(drop)
-    }
-    // 0x0D: Repeat fingerprint check
-    pub async fn wait_repeatfingerprint(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::Repeatfingerprint)
-            .await
-            .map(drop)
-    }
-    // 0x0E: Merge feature
-    pub async fn wait_merge_feature(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::MergeFeature)
-            .await
-            .map(drop)
-    }
-    // 0x0F: Storage template
-    pub async fn wait_storage_template(&mut self) -> Result<u8, Error<S>> {
-        self.wait_step(self.address, AutoEnrollStep::StorageTemplate)
-            .await
-    }
-
-    async fn wait_step(&mut self, address: u32, step: AutoEnrollStep) -> Result<u8, Error<S>> {
-        let resp = Response::<AutoEnrollResponse>::from_wire(self.serial).await?;
-        let mut good = true;
-        good &= resp.address == address;
-        good &= resp.ident == PackageIdentifier::AcknowledgePacket.into();
-        if !good {
-            return Err(Error::IncorrectData);
-        }
-        if resp.confirmation != ConfirmationCode::SuccessCode {
-            return Err(Error::BadConfirmation(resp.confirmation));
-        }
-        if resp.body.step != step {
-            return Err(Error::IncorrectData);
-        }
-        Ok(resp.body.model_id)
-    }
-}
-
 // Helper macro for implementing basic Command + Acknowledge patterns.
 //
 // Items can optionally take send or receive payloads, though they need to
@@ -558,6 +307,31 @@ macro_rules! cmds_with_ack {
     };
 }
 
+#[derive(Debug)]
+pub struct LoadCharRequest {
+    pub char_buffer: CharBufferId,
+    pub model_id: u16,
+}
+
+impl ToWire for LoadCharRequest {
+    fn size_on_wire(&self) -> usize {
+        3
+    }
+
+    async fn to_wire<S: Write + ErrorType>(
+        &self,
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> Result<(), Error<S>> {
+        let [hi, lo] = self.model_id.to_be_bytes();
+        let data = [self.char_buffer.into(), hi, lo];
+        if let Some(c) = cksm {
+            c.update(&data);
+        }
+        serial.write_all(&data).await.map_err(Error::Wire)
+    }
+}
+
 impl R503 {
     cmds_with_ack! {
         | Function              | Code                      | CmdDataTy             | RespDataTy    |
@@ -570,5 +344,8 @@ impl R503 {
         | generate_template     | RegModel                  |                       |               |
         | upload_template       | UpChar                    | CharBufferId          |               |
         | set_aura              | AuraControl               | AuraControlPayload    |               |
+        | read_idx_table        | ReadIndexTable            | IndexTableIdx         | [u8; 32]      |
+        | empty                 | Empty                     |                       |               |
+        | load_char             | LoadChar                  | LoadCharRequest       |               |
     }
 }

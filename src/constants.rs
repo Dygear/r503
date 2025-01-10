@@ -1,5 +1,3 @@
-use core::num::NonZeroU8;
-
 use crate::{wire_traits::ToWire, Error};
 
 // Helper macro that generate a lot of accessors for enum to integer conversions
@@ -92,11 +90,15 @@ be_enum! {
         GetImage -> 0x01,
         GenChar -> 0x02,
         RegModel -> 0x05,
+        LoadChar -> 0x07,
         UpChar -> 0x08,
         UpImage -> 0x0A,
+        Empty -> 0x0D,
         GetRandomCode -> 0x14,
         ReadSystemParameter -> 0x0F,
+        ReadIndexTable -> 0x1F,
         AutomaticRegistrationTemplate -> 0x31,
+        AutomaticFingerprintVerification -> 0x32,
         AuraControl -> 0x35,
     }
 }
@@ -234,6 +236,27 @@ be_enum! {
 }
 
 be_enum! {
+    name: AutoIdentifyStep;
+    integer: u8;
+    {
+        CollectImage -> 0x01,
+        GenerateFeature -> 0x02,
+        Search -> 0x03,
+    }
+}
+
+be_enum! {
+    name: IndexTableIdx;
+    integer: u8;
+    {
+        Zero -> 0x00,
+        One -> 0x01,
+        Two -> 0x02,
+        Three -> 0x03,
+    }
+}
+
+be_enum! {
     name: AuraControlCode;
     integer: u8;
     {
@@ -320,5 +343,63 @@ impl ToWire for AuraControlPayload {
             self.count.to_wire(serial, None).await?;
         }
         Ok(())
+    }
+}
+
+be_enum! {
+    name: IdentifySafety;
+    integer: u8;
+    {
+        One -> 0x01,
+        Two -> 0x02,
+        Three -> 0x03,
+        Four -> 0x04,
+        Five -> 0x05,
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum AutoIdentCount {
+    Infinite,
+    TimesWithTimeout(u8),
+}
+
+impl ToWire for AutoIdentCount {
+    fn size_on_wire(&self) -> usize {
+        1
+    }
+
+    async fn to_wire<S: embedded_io_async::Write + embedded_io_async::ErrorType>(
+        &self,
+        serial: &mut S,
+        cksm: Option<&mut crate::Checksum>,
+    ) -> Result<(), Error<S>> {
+        let value: u8 = match self {
+            AutoIdentCount::Infinite => 0,
+            AutoIdentCount::TimesWithTimeout(non_zero) => *non_zero,
+        };
+        if let Some(c) = cksm {
+            c.update(&[value]);
+        }
+        serial.write_all(&[value]).await.map_err(Error::Wire)
+    }
+}
+
+impl From<AutoIdentCount> for u8 {
+    fn from(value: AutoIdentCount) -> Self {
+        match value {
+            AutoIdentCount::Infinite => 0,
+            AutoIdentCount::TimesWithTimeout(n) => n,
+        }
+    }
+}
+
+impl From<u8> for AutoIdentCount {
+    fn from(value: u8) -> Self {
+        if value == 0 {
+            AutoIdentCount::Infinite
+        } else {
+            AutoIdentCount::TimesWithTimeout(value)
+        }
     }
 }
