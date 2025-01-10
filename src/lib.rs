@@ -2,10 +2,11 @@
 
 use core::fmt::Debug;
 
-use constants::{CharBufferId, Commands, ConfirmationCode, PackageIdentifier};
+use constants::{AuraControlPayload, CharBufferId, Commands, ConfirmationCode, IndexTableIdx, PackageIdentifier};
 use embedded_io_async::{ErrorType, Read, ReadExactError, Write};
 use wire_traits::{FromWire, ToWire};
 
+pub mod auto;
 pub mod constants;
 pub mod wire_traits;
 
@@ -21,6 +22,7 @@ where
     IncorrectData,
     EndOfFile,
     BadConfirmation(ConfirmationCode),
+    BadChecksum,
 }
 
 impl<S> Debug for Error<S>
@@ -44,6 +46,7 @@ where
                 f.write_str(")")?;
                 Ok(())
             }
+            Error::BadChecksum => f.write_str("Error::BadChecksum"),
         }
     }
 }
@@ -61,7 +64,7 @@ pub struct Command<T: ToWire> {
 impl<T: ToWire> Command<T> {
     pub async fn to_wire<S>(&self, serial: &mut S) -> Result<(), Error<S>>
     where
-        S: Read + Write + ErrorType,
+        S: Write + ErrorType,
     {
         // Header
         0xEF01u16.to_wire(serial, None).await?;
@@ -130,7 +133,7 @@ impl<T> Response<T> {
         let rept_cksm = u16::from_wire(serial, None).await?;
 
         if calc_cksm != rept_cksm {
-            return Err(Error::IncorrectData);
+            return Err(Error::BadChecksum);
         }
         Ok(Self {
             address,
@@ -182,6 +185,10 @@ pub struct R503 {
 impl R503 {
     pub fn new_with_address(addr: u32) -> Self {
         Self { address: addr }
+    }
+
+    pub fn address(&self) -> u32 {
+        self.address
     }
 
     pub async fn stream_image<S: Read + ErrorType>(
@@ -242,7 +249,7 @@ impl R503 {
             let rept_cksm = u16::from_wire(serial, None).await?;
 
             if calc_cksm != rept_cksm {
-                return Err(Error::IncorrectData);
+                return Err(Error::BadChecksum);
             }
         }
         let used = ttl_len - window.len();
@@ -300,16 +307,45 @@ macro_rules! cmds_with_ack {
     };
 }
 
+#[derive(Debug)]
+pub struct LoadCharRequest {
+    pub char_buffer: CharBufferId,
+    pub model_id: u16,
+}
+
+impl ToWire for LoadCharRequest {
+    fn size_on_wire(&self) -> usize {
+        3
+    }
+
+    async fn to_wire<S: Write + ErrorType>(
+        &self,
+        serial: &mut S,
+        cksm: Option<&mut Checksum>,
+    ) -> Result<(), Error<S>> {
+        let [hi, lo] = self.model_id.to_be_bytes();
+        let data = [self.char_buffer.into(), hi, lo];
+        if let Some(c) = cksm {
+            c.update(&data);
+        }
+        serial.write_all(&data).await.map_err(Error::Wire)
+    }
+}
+
 impl R503 {
     cmds_with_ack! {
-        | Function              | Code                      | CmdDataTy         | RespDataTy    |
-        | --------              | ----                      | ---------         | ----------    |
-        | get_rand_code         | GetRandomCode             |                   | u32           |
-        | read_system_parameter | ReadSystemParameter       |                   | [u8; 16]      |
-        | get_image             | GetImage                  |                   |               |
-        | upload_image          | UpImage                   |                   |               |
-        | generate_char         | GenChar                   | CharBufferId      |               |
-        | generate_template     | RegModel                  |                   |               |
-        | upload_template       | UpChar                    | CharBufferId      |               |
+        | Function              | Code                      | CmdDataTy             | RespDataTy    |
+        | --------              | ----                      | ---------             | ----------    |
+        | get_rand_code         | GetRandomCode             |                       | u32           |
+        | read_system_parameter | ReadSystemParameter       |                       | [u8; 16]      |
+        | get_image             | GetImage                  |                       |               |
+        | upload_image          | UpImage                   |                       |               |
+        | generate_char         | GenChar                   | CharBufferId          |               |
+        | generate_template     | RegModel                  |                       |               |
+        | upload_template       | UpChar                    | CharBufferId          |               |
+        | set_aura              | AuraControl               | AuraControlPayload    |               |
+        | read_idx_table        | ReadIndexTable            | IndexTableIdx         | [u8; 32]      |
+        | empty                 | Empty                     |                       |               |
+        | load_char             | LoadChar                  | LoadCharRequest       |               |
     }
 }
