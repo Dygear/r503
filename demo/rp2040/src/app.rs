@@ -1,12 +1,9 @@
 //! A basic postcard-rpc/poststation-compatible application
 
-use crate::handlers::{
-    get_baudrate_handler, picoboot_reset, send_uart_handler, set_baudrate_handler, sleep_handler,
-    unique_id,
-};
+use crate::handlers::*;
 use embassy_rp::{gpio::Output, peripherals::{UART1, USB}, uart::BufferedUart, usb};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
-use postcard_rpc::server::impls::embassy_usb_v0_3::{
+use postcard_rpc::server::impls::embassy_usb_v0_4::{
     dispatch_impl::{spawn_fn, WireRxBuf, WireRxImpl, WireSpawnImpl, WireStorage, WireTxImpl},
     PacketBuffers,
 };
@@ -15,9 +12,7 @@ use postcard_rpc::{
     server::{Server, SpawnContext},
 };
 use static_cell::ConstStaticCell;
-use uartbridge_icd::{
-    GetBaudrate, GetUniqueIdEndpoint, RebootToPicoBoot, SetBaudrate, SleepEndpoint, UartSendTopic,
-};
+use uartbridge_icd::*;
 use uartbridge_icd::{ENDPOINT_LIST, TOPICS_IN_LIST, TOPICS_OUT_LIST};
 
 /// Context contains the data that we will pass (as a mutable reference)
@@ -84,11 +79,11 @@ define_dispatch! {
     // app.
     app: MyApp;
     // This chooses how we spawn functions. Here, we use the implementation
-    // from the `embassy_usb_v0_3` implementation
+    // from the `embassy_usb_v0_4` implementation
     spawn_fn: spawn_fn;
     // This is our TX impl, which we aliased above
     tx_impl: AppTx;
-    // This is our spawn impl, which also comes from `embassy_usb_v0_3`.
+    // This is our spawn impl, which also comes from `embassy_usb_v0_4`.
     spawn_impl: WireSpawnImpl;
     // This is the context type we defined above
     context: Context;
