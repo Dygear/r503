@@ -4,7 +4,7 @@ use postcard_rpc::Key;
 use postcard_schema::Schema;
 use poststation_sdk::connect;
 use r503::{
-    auto::{AutoEnroll, AutoEnrollConfig, AutoIdentify, AutoIdentifyConfig}, constants::{AutoIdentCount, CharBufferId, IdentifySafety, IndexTableIdx}, LoadCharRequest, R503
+    auto::{AutoEnroll, AutoEnrollConfig, AutoIdentify, AutoIdentifyConfig}, constants::{AutoIdentCount, CharBufferId, ConfirmationCode, IdentifySafety, IndexTableIdx}, Error, LoadCharRequest, R503
 };
 use serde::{Deserialize, Serialize};
 use std::{fs::File, io::{Read as _, Write}, net::SocketAddr, num::ParseIntError, time::Duration};
@@ -137,8 +137,15 @@ async fn inner_main() -> anyhow::Result<()> {
                     return_status: true,
                     err_count,
                 };
+                println!("Starting Auto Ident loop. Press enter to cancel");
                 let fut = async {
-                    while let Ok(()) = auto_identify(r5, serial, cfg.clone()).await {
+                    loop {
+                        match auto_identify(r5, serial, cfg.clone()).await {
+                            Ok(()) => {}
+                            Err(e) => {
+                                println!("{e:?}");
+                            }
+                        }
                         println!("REMOVE FINGER!");
                         sleep(Duration::from_secs(3)).await;
                     }
@@ -264,6 +271,13 @@ async fn auto_identify(
     serial: &mut FakeSerial,
     cfg: AutoIdentifyConfig,
 ) -> Result<(), r503::Error<FakeSerial>> {
+    // In case there are any stale updates (for example: the sensor replied twice
+    // but we only heard the first response), drain any pending data on the UART before
+    // starting a new transaction
+    let dumped = read_dump(serial).await?;
+    if dumped != 0 {
+        println!("Dumped {dumped} bytes");
+    }
     let mut identify = AutoIdentify::new(r5.address(), serial);
     let err_count = cfg.err_count;
     identify.start(cfg).await?;
@@ -275,15 +289,15 @@ async fn auto_identify(
     };
 
     for _ in 0..times {
-        println!("Collect Image...");
-        identify.wait_collect_image().await?;
-        println!("Generate Template...");
-        identify.wait_generate_feature().await?;
-        println!("Searching...");
-        let res = identify.wait_search().await;
+        println!("Auto Ident...");
+        let res = identify.wait_auto().await;
         match res {
             Ok(resp) => {
                 println!("Match! ID: {} Score: {}", resp.model_id, resp.score);
+                break;
+            }
+            Err(Error::BadConfirmation(ConfirmationCode::Timeout)) => {
+                println!("Timeout!");
                 break;
             }
             Err(e) => println!("ERR: {e:?}"),
@@ -291,6 +305,21 @@ async fn auto_identify(
     }
 
     Ok(())
+}
+
+async fn read_dump(serial: &mut FakeSerial) -> Result<usize, r503::Error<FakeSerial>> {
+    let mut buf = [0u8; 64];
+    let mut ct = 0;
+    loop {
+
+        match timeout(Duration::from_millis(100), serial.read(&mut buf)).await {
+            Ok(Ok(n)) => {
+                ct += n;
+            }
+            Ok(Err(e)) => return Err(r503::Error::Wire(e)),
+            Err(_) => return Ok(ct),
+        }
+    }
 }
 
 async fn auto_enroll(r5: &R503, serial: &mut FakeSerial) -> Result<(), r503::Error<FakeSerial>> {

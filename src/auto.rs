@@ -361,19 +361,37 @@ where
         command.to_wire(self.serial).await
     }
 
-    pub async fn wait_collect_image(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoIdentifyStep::CollectImage).await.map(drop)
+    pub async fn wait_auto(&mut self) -> Result<AutoIdentifyResponse, Error<S>> {
+        if let Some(r) = self.wait_collect_image().await? {
+            return Ok(r);
+        }
+        if let Some(r) = self.wait_generate_feature().await? {
+            return Ok(r);
+        }
+        self.wait_search().await
     }
 
-    pub async fn wait_generate_feature(&mut self) -> Result<(), Error<S>> {
-        self.wait_step(self.address, AutoIdentifyStep::GenerateFeature).await.map(drop)
+    // Originally these steps were public, but it seems like SOMETIMES the device just decides
+    // to skip straight to the end if it finds a finger it knows. For that reason, the
+    // `wait_auto` function catches this now, and users should just use that instead.
+
+    async fn wait_collect_image(&mut self) -> Result<Option<AutoIdentifyResponse>, Error<S>> {
+        self.wait_step(self.address, AutoIdentifyStep::CollectImage).await
     }
 
-    pub async fn wait_search(&mut self) -> Result<AutoIdentifyResponse, Error<S>> {
-        self.wait_step(self.address, AutoIdentifyStep::Search).await
+    async fn wait_generate_feature(&mut self) -> Result<Option<AutoIdentifyResponse>, Error<S>> {
+        self.wait_step(self.address, AutoIdentifyStep::GenerateFeature).await
     }
 
-    async fn wait_step(&mut self, address: u32, step: AutoIdentifyStep) -> Result<AutoIdentifyResponse, Error<S>> {
+    async fn wait_search(&mut self) -> Result<AutoIdentifyResponse, Error<S>> {
+        if let Some(r) = self.wait_step(self.address, AutoIdentifyStep::Search).await? {
+            Ok(r)
+        } else {
+            Err(Error::IncorrectData)
+        }
+    }
+
+    async fn wait_step(&mut self, address: u32, step: AutoIdentifyStep) -> Result<Option<AutoIdentifyResponse>, Error<S>> {
         let resp = Response::<AutoIdentifyResponse>::from_wire(self.serial).await?;
         let mut good = true;
         good &= resp.address == address;
@@ -384,9 +402,12 @@ where
         if resp.confirmation != ConfirmationCode::SuccessCode {
             return Err(Error::BadConfirmation(resp.confirmation));
         }
-        if resp.body.step != step {
-            return Err(Error::IncorrectData);
+        if resp.body.step == AutoIdentifyStep::Search {
+            Ok(Some(resp.body))
+        } else if resp.body.step != step {
+            Err(Error::IncorrectData)
+        } else {
+            Ok(None)
         }
-        Ok(resp.body)
     }
 }
