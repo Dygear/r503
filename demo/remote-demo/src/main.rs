@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn inner_main() -> anyhow::Result<()> {
     let server: SocketAddr = "127.0.0.1:51837".parse().unwrap();
-    let client = connect(server).await;
+    let client = connect(server).await.unwrap();
     let serial = 0xE462B044CB202439u64;
 
     let mut serial = FakeSerial::new(&client, serial).await.unwrap();

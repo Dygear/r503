@@ -2,13 +2,13 @@
 
 use std::{collections::VecDeque, time::Duration};
 
-use poststation_sdk::{SquadClient, StreamListener};
+use poststation_sdk::{ClientError, PoststationClient, StreamListener};
 use tokio::time::timeout;
 use uartbridge_icd::{SetBaudrate, UartFrame, UartRecvTopic, UartSendTopic};
 
 
 pub struct FakeSerial {
-    client: SquadClient,
+    client: PoststationClient,
     serial: u64,
     in_queue: VecDeque<u8>,
     subs: StreamListener<UartRecvTopic>,
@@ -16,7 +16,7 @@ pub struct FakeSerial {
 }
 
 impl FakeSerial {
-    pub async fn new(client: &SquadClient, serial: u64) -> Result<Self, String> {
+    pub async fn new(client: &PoststationClient, serial: u64) -> Result<Self, ClientError> {
         let subs = client.stream_topic::<UartRecvTopic>(serial).await?;
         Ok(Self {
             client: client.clone(),
@@ -27,7 +27,7 @@ impl FakeSerial {
         })
     }
 
-    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), String> {
+    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), ClientError> {
         self.seq_ctr = self.seq_ctr.wrapping_add(1);
         self.client
             .proxy_endpoint::<SetBaudrate>(self.serial, self.seq_ctr, &baudrate)
